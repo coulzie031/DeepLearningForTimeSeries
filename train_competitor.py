@@ -563,10 +563,7 @@ def main():
     norm_after  = np.linalg.norm(feat_tr_s, axis=1).mean()
     print(f"  Feature L2 norm: before scaling={norm_before:.1f}  after={norm_after:.1f}")
 
-    lr_clf = LogisticRegression(max_iter=2000, C=1.0, solver="saga", n_jobs=-1)
-    lr_clf.fit(feat_tr_s, y_tr)
-    lr_va_acc = (lr_clf.predict(feat_va_s) == y_va).mean()
-    print(f"  LogReg val accuracy on stacked features: {lr_va_acc:.4f}")
+    # LogReg removed — too slow on 80k+ dims, not used in final ensemble
 
     # ═══════════════════════════════════════════════════════════════════════════
     # Step E — Feature-stacking MLP

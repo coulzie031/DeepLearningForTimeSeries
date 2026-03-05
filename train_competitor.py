@@ -83,8 +83,8 @@ CFG = {
     "ptst_lr":              5e-4,
     "ptst_patience":        20,
 
-    # Use MOMENT backbone (set False to skip — avoids NaN on gradient checkpointing)
-    "use_moment":           False,
+    # Use MOMENT backbone (gradient checkpointing disabled to prevent NaN)
+    "use_moment":           True,
 
     # MultiROCKET
     "rocket_n_kernels":     10000,

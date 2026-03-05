@@ -1,0 +1,15 @@
+# Core
+torch>=2.0
+numpy
+scikit-learn
+scipy
+matplotlib
+tslearn
+
+# Foundation models (competitor)
+momentfm          # pip install momentfm
+aeon              # pip install aeon          (MultiROCKET)
+mantis-tsfm       # pip install mantis-tsfm   (MANTIS embeddings)
+
+# Optional (for time warping)
+scipy

@@ -563,7 +563,29 @@ def main():
     norm_after  = np.linalg.norm(feat_tr_s, axis=1).mean()
     print(f"  Feature L2 norm: before scaling={norm_before:.1f}  after={norm_after:.1f}")
 
-    # LogReg removed — too slow on 80k+ dims, not used in final ensemble
+    # Ridge classifier on MultiROCKET features only (fast, often SOTA on small datasets)
+    ridge_clf = None
+    va_f1_ridge = 0.0
+    ridge_va_probs = None
+    ridge_te_probs = None
+    if Z_mr_tr is not None:
+        print("\n  Training Ridge(ROCKET)...")
+        from sklearn.linear_model import RidgeClassifierCV
+        from sklearn.preprocessing import StandardScaler as MRScaler
+        mr_sc = MRScaler().fit(Z_mr_tr)
+        Z_mr_tr_s = mr_sc.transform(Z_mr_tr)
+        Z_mr_va_s = mr_sc.transform(Z_mr_va)
+        Z_mr_te_s = mr_sc.transform(Z_mr_te)
+        ridge_clf = RidgeClassifierCV(alphas=np.logspace(-3, 3, 10), class_weight="balanced")
+        ridge_clf.fit(Z_mr_tr_s, y_tr)
+        ridge_va_preds = ridge_clf.predict(Z_mr_va_s)
+        va_f1_ridge = f1_score(y_va, ridge_va_preds, average="macro", zero_division=0)
+        print(f"  Ridge(ROCKET) val Macro F1: {va_f1_ridge:.4f}")
+        def _softmax(x):
+            e = np.exp(x - x.max(axis=1, keepdims=True))
+            return e / e.sum(axis=1, keepdims=True)
+        ridge_va_probs = _softmax(ridge_clf.decision_function(Z_mr_va_s))
+        ridge_te_probs = _softmax(ridge_clf.decision_function(Z_mr_te_s))
 
     # ═══════════════════════════════════════════════════════════════════════════
     # Step E — Feature-stacking MLP
@@ -623,11 +645,12 @@ def main():
     print(f"  Val Macro F1 — {primary_name}: {va_f1_prim:.4f}")
     print(f"  Val Macro F1 — PatchTST:       {va_f1_ptst:.4f}")
     print(f"  Val Macro F1 — FeatureMLP:     {va_f1_mlp:.4f}")
+    print(f"  Val Macro F1 — Ridge(ROCKET):  {va_f1_ridge:.4f}")
 
-    f1s     = np.array([va_f1_prim, va_f1_ptst, va_f1_mlp])
+    f1s     = np.array([va_f1_prim, va_f1_ptst, va_f1_mlp, va_f1_ridge])
     weights = np.exp(f1s * 10)
     weights /= weights.sum()
-    print(f"  Ensemble weights: {np.round(weights, 3)}")
+    print(f"  Ensemble weights: {np.round(weights, 4)}")
 
     @torch.no_grad()
     def get_probs(model, loader, dev):
@@ -641,8 +664,9 @@ def main():
     probs_prim = np.nan_to_num(get_probs(primary_model, test_loader,      device), nan=1.0/NUM_CLASSES)
     probs_ptst = np.nan_to_num(get_probs(patchtst,      test_loader,      device), nan=1.0/NUM_CLASSES)
     probs_mlp  = np.nan_to_num(get_probs(feat_mlp,      feat_test_loader, device), nan=1.0/NUM_CLASSES)
+    probs_ridg = np.nan_to_num(ridge_te_probs, nan=1.0/NUM_CLASSES) if ridge_te_probs is not None else np.full_like(probs_prim, 1.0/NUM_CLASSES)
 
-    probs_ens  = (weights[0] * probs_prim + weights[1] * probs_ptst + weights[2] * probs_mlp)
+    probs_ens  = (weights[0] * probs_prim + weights[1] * probs_ptst + weights[2] * probs_mlp + weights[3] * probs_ridg)
     preds_ens  = probs_ens.argmax(axis=1)
 
     acc_ens, f1_ens, report_ens, cm_ens = compute_metrics(y_test, preds_ens, le)
@@ -679,9 +703,10 @@ def main():
         f.write(f"  {primary_name}:\n  Acc={a_prim2:.4f}  Macro F1={f1_prim2:.4f}\n\n")
         f.write(f"  PatchTST:\n  Acc={a_ptst2:.4f}  Macro F1={f1_ptst2:.4f}\n\n")
         f.write(f"  FeatureMLP:\n  Best val Macro F1={best_mlp_f1:.4f}\n\n")
+        f.write(f"  Ridge(ROCKET):\n  Val Macro F1={va_f1_ridge:.4f}\n\n")
         f.write("Ensemble:\n")
         f.write(f"  Acc={acc_ens:.4f}  Macro F1={f1_ens:.4f}\n")
-        f.write(f"  Weights: {primary_name}={weights[0]:.3f}  PatchTST={weights[1]:.3f}  FeatureMLP={weights[2]:.3f}\n\n")
+        f.write(f"  Weights: {primary_name}={weights[0]:.3f}  PatchTST={weights[1]:.3f}  FeatureMLP={weights[2]:.3f}  Ridge={weights[3]:.3f}\n\n")
         f.write(f"Classification Report (Ensemble):\n{report_ens}\n")
 
     print(f"\n  All outputs saved to {rd}/")

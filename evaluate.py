@@ -268,7 +268,7 @@ def main():
     score(f"{rd}/baseline_preds.npy", f"{rd}/baseline_targets.npy", "Baseline")
 
     # Competitor / ensemble
-    score(f"{rd}/moment_preds.npy", f"{rd}/competitor_targets.npy", "Primary (InceptionTime-L)")
+    score(f"{rd}/moment_preds.npy", f"{rd}/competitor_targets.npy", "Primary model")
     score(f"{rd}/patchtst_preds.npy", f"{rd}/competitor_targets.npy", "PatchTST")
     score(f"{rd}/competitor_preds.npy", f"{rd}/competitor_targets.npy", "Ensemble")
 

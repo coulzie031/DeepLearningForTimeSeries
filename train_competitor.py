@@ -401,66 +401,76 @@ def main():
 
     logs_moment = {"train_loss": [], "val_loss": [], "train_acc": [], "val_acc": [], "val_f1": []}
 
-    if moment_available and CFG.get("use_moment", True):
+    _use_moment = moment_available and CFG.get("use_moment", True)
+    primary_model = None  # will be set below
+
+    if _use_moment:
         print_header("Step B: MOMENT fine-tuning (3-phase)")
+        try:
+            moment = MOMENTClassifier(num_classes=NUM_CLASSES, n_channels=N_CHANNELS, dropout=0.2)
+            moment.load_moment(device=str(device))
+            moment = moment.to(device)
 
-        moment = MOMENTClassifier(num_classes=NUM_CLASSES, n_channels=N_CHANNELS, dropout=0.2)
-        moment.load_moment(device=str(device))
-        moment = moment.to(device)
+            # Phase 1 — linear probing (backbone frozen)
+            print(f"\n--- Phase 1: Linear probing ({CFG['lp_epochs']} epochs) ---")
+            moment.freeze_encoder()
+            n_p1 = sum(p.numel() for p in moment.parameters() if p.requires_grad)
+            pipeline_status["phase1_params"] = n_p1
 
-        # Phase 1
-        print(f"\n--- Phase 1: Linear probing ({CFG['lp_epochs']} epochs) ---")
-        moment.freeze_encoder()
-        n_p1 = sum(p.numel() for p in moment.parameters() if p.requires_grad)
-        pipeline_status["phase1_params"] = n_p1
+            opt_lp = torch.optim.AdamW([p for p in moment.parameters() if p.requires_grad],
+                                       lr=CFG["lp_lr"], weight_decay=1e-4)
+            log_param_groups(opt_lp, "Phase 1")
+            sched_lp = torch.optim.lr_scheduler.CosineAnnealingLR(opt_lp, T_max=CFG["lp_epochs"], eta_min=1e-6)
+            train_model(moment, train_loader, val_loader, opt_lp, criterion, sched_lp, None,
+                        CFG["lp_epochs"], device, logs_moment, use_mixup=False)
 
-        opt_lp = torch.optim.AdamW([p for p in moment.parameters() if p.requires_grad], lr=CFG["lp_lr"], weight_decay=1e-4)
-        log_param_groups(opt_lp, "Phase 1")
-        sched_lp = torch.optim.lr_scheduler.CosineAnnealingLR(opt_lp, T_max=CFG["lp_epochs"], eta_min=1e-6)
-        train_model(moment, train_loader, val_loader, opt_lp, criterion, sched_lp, None,
-                    CFG["lp_epochs"], device, logs_moment, use_mixup=False)
+            # Phase 2 — gradual unfreeze (gradient checkpointing disabled inside unfreeze_last_n)
+            print(f"\n--- Phase 2: Gradual unfreeze ({CFG['gu_epochs']} epochs) ---")
+            moment.unfreeze_last_n(n=CFG["gu_n_blocks"])
+            n_p2 = sum(p.numel() for p in moment.parameters() if p.requires_grad)
+            pipeline_status["phase2_params"] = n_p2
 
-        # Phase 2
-        print(f"\n--- Phase 2: Gradual unfreeze ({CFG['gu_epochs']} epochs) ---")
-        moment.unfreeze_last_n(n=CFG["gu_n_blocks"])
-        n_p2 = sum(p.numel() for p in moment.parameters() if p.requires_grad)
-        pipeline_status["phase2_params"] = n_p2
+            param_groups = moment.get_param_groups(lr_head=CFG["gu_lr_head"], lr_encoder=CFG["gu_lr_enc"])
+            opt_gu = torch.optim.AdamW(param_groups, weight_decay=1e-4)
+            log_param_groups(opt_gu, "Phase 2")
+            sched_gu = torch.optim.lr_scheduler.CosineAnnealingLR(opt_gu, T_max=CFG["gu_epochs"], eta_min=1e-7)
+            es_gu = EarlyStopping(patience=10, mode="max")
+            train_model(moment, train_loader, val_loader, opt_gu, criterion, sched_gu, es_gu,
+                        CFG["gu_epochs"], device, logs_moment,
+                        use_mixup=CFG["use_mixup"], mixup_alpha=CFG["mixup_alpha"])
 
-        param_groups = moment.get_param_groups(lr_head=CFG["gu_lr_head"], lr_encoder=CFG["gu_lr_enc"])
-        opt_gu = torch.optim.AdamW(param_groups, weight_decay=1e-4)
-        log_param_groups(opt_gu, "Phase 2")
-        sched_gu = torch.optim.lr_scheduler.CosineAnnealingLR(opt_gu, T_max=CFG["gu_epochs"], eta_min=1e-7)
-        es_gu = EarlyStopping(patience=10, mode="max")
-        train_model(moment, train_loader, val_loader, opt_gu, criterion, sched_gu, es_gu,
-                    CFG["gu_epochs"], device, logs_moment,
-                    use_mixup=CFG["use_mixup"], mixup_alpha=CFG["mixup_alpha"])
+            # Phase 3 — full fine-tune
+            print(f"\n--- Phase 3: Full fine-tuning ({CFG['ft_epochs']} epochs) ---")
+            moment.unfreeze_all()
+            n_p3 = sum(p.numel() for p in moment.parameters() if p.requires_grad)
+            pipeline_status["phase3_params"] = n_p3
 
-        # Phase 3
-        print(f"\n--- Phase 3: Full fine-tuning ({CFG['ft_epochs']} epochs) ---")
-        moment.unfreeze_all()
-        n_p3 = sum(p.numel() for p in moment.parameters() if p.requires_grad)
-        pipeline_status["phase3_params"] = n_p3
+            param_groups = moment.get_param_groups(lr_head=CFG["ft_lr_head"], lr_encoder=CFG["ft_lr_enc"])
+            opt_ft = torch.optim.AdamW(param_groups, weight_decay=1e-2)
+            log_param_groups(opt_ft, "Phase 3")
+            sched_ft = torch.optim.lr_scheduler.CosineAnnealingLR(opt_ft, T_max=CFG["ft_epochs"], eta_min=1e-8)
+            es_ft = EarlyStopping(patience=CFG["ft_patience"], mode="max")
 
-        param_groups = moment.get_param_groups(lr_head=CFG["ft_lr_head"], lr_encoder=CFG["ft_lr_enc"])
-        opt_ft = torch.optim.AdamW(param_groups, weight_decay=1e-2)
-        log_param_groups(opt_ft, "Phase 3")
-        sched_ft = torch.optim.lr_scheduler.CosineAnnealingLR(opt_ft, T_max=CFG["ft_epochs"], eta_min=1e-8)
-        es_ft = EarlyStopping(patience=CFG["ft_patience"], mode="max")
+            best_moment_f1 = train_model(moment, train_loader, val_loader, opt_ft, criterion, sched_ft, es_ft,
+                                         CFG["ft_epochs"], device, logs_moment,
+                                         use_mixup=CFG["use_mixup"], mixup_alpha=CFG["mixup_alpha"])
 
-        best_moment_f1 = train_model(moment, train_loader, val_loader, opt_ft, criterion, sched_ft, es_ft,
-                                     CFG["ft_epochs"], device, logs_moment,
-                                     use_mixup=CFG["use_mixup"], mixup_alpha=CFG["mixup_alpha"])
+            torch.save(moment.state_dict(), f"{rd}/best_moment.pt")
+            save_logs(logs_moment, f"{rd}/logs_moment.npz")
 
-        torch.save(moment.state_dict(), f"{rd}/best_moment.pt")
-        save_logs(logs_moment, f"{rd}/logs_moment.npz")
+            primary_model = moment
+            primary_name  = "MOMENT"
+            pipeline_status["primary_model"] = "MOMENT-1-large (fine-tuned, 3-phase)"
+            primary_f1 = best_moment_f1
 
-        primary_model = moment
-        primary_name  = "MOMENT"
-        pipeline_status["primary_model"] = "MOMENT-1-large (fine-tuned, 3-phase)"
-        primary_f1 = best_moment_f1
+        except Exception as moment_err:
+            print(f"\n  [WARN] MOMENT failed: {moment_err}")
+            print("  Falling back to InceptionTime-Large.\n")
+            primary_model = None  # triggers fallback below
 
-    else:
-        reason = "use_moment=False" if not CFG.get("use_moment", True) else "momentfm missing"
+    if primary_model is None:
+        reason = ("use_moment=False" if not CFG.get("use_moment", True)
+                  else ("MOMENT failed — fallback" if _use_moment else "momentfm missing"))
         print_header(f"Step B: InceptionTime-Large (primary — {reason})")
 
         primary_model = InceptionTime(

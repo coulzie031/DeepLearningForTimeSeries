@@ -169,6 +169,29 @@ class MOMENTClassifier(nn.Module):
 
         return None, None
 
+    def _disable_gradient_checkpointing(self):
+        """
+        Disable gradient checkpointing on the backbone to avoid NaN gradients
+        when unfreezing T5 layers. Called before any backbone unfreeze.
+        """
+        try:
+            # Standard HuggingFace API
+            self.backbone.model.gradient_checkpointing_disable()
+            print("  Gradient checkpointing disabled (HF API).")
+            return
+        except AttributeError:
+            pass
+        # Manual fallback: walk all modules and disable
+        disabled = 0
+        for mod in self.backbone.modules():
+            if hasattr(mod, "gradient_checkpointing"):
+                mod.gradient_checkpointing = False
+                disabled += 1
+        if disabled:
+            print(f"  Gradient checkpointing disabled on {disabled} module(s).")
+        else:
+            print("  [INFO] No gradient checkpointing found — nothing to disable.")
+
     def unfreeze_last_n(self, n=2):
         """
         Unfreeze last n transformer blocks + norms + patch embeddings.
@@ -177,6 +200,8 @@ class MOMENTClassifier(nn.Module):
         """
         if not self._loaded:
             raise RuntimeError("Call load_moment() first.")
+        # Disable gradient checkpointing BEFORE unfreezing to prevent NaN gradients
+        self._disable_gradient_checkpointing()
 
         # Freeze everything first
         for p in self.backbone.parameters():
@@ -238,6 +263,7 @@ class MOMENTClassifier(nn.Module):
         """Full fine-tuning: unfreeze entire backbone."""
         if not self._loaded:
             raise RuntimeError("Call load_moment() first.")
+        self._disable_gradient_checkpointing()
         for p in self.backbone.parameters():
             p.requires_grad = True
         n_total = sum(p.numel() for p in self.backbone.parameters())

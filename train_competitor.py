@@ -47,7 +47,7 @@ CFG = {
     "random_state":         42,
 
     # Class imbalance strategy: both|sampler_only|weights_only|none
-    "imbalance_strategy":   "both",
+    "imbalance_strategy":   "sampler_only",
 
     # Augmentation
     "jitter_sigma":         0.03,
@@ -82,6 +82,9 @@ CFG = {
     "ptst_epochs":          150,
     "ptst_lr":              5e-4,
     "ptst_patience":        20,
+
+    # Use MOMENT backbone (set False to skip — avoids NaN on gradient checkpointing)
+    "use_moment":           False,
 
     # MultiROCKET
     "rocket_n_kernels":     10000,
@@ -398,7 +401,7 @@ def main():
 
     logs_moment = {"train_loss": [], "val_loss": [], "train_acc": [], "val_acc": [], "val_f1": []}
 
-    if moment_available:
+    if moment_available and CFG.get("use_moment", True):
         print_header("Step B: MOMENT fine-tuning (3-phase)")
 
         moment = MOMENTClassifier(num_classes=NUM_CLASSES, n_channels=N_CHANNELS, dropout=0.2)
@@ -457,7 +460,8 @@ def main():
         primary_f1 = best_moment_f1
 
     else:
-        print_header("Step B: InceptionTime-Large (fallback)")
+        reason = "use_moment=False" if not CFG.get("use_moment", True) else "momentfm missing"
+        print_header(f"Step B: InceptionTime-Large (primary — {reason})")
 
         primary_model = InceptionTime(
             n_channels=N_CHANNELS, num_classes=NUM_CLASSES,
@@ -476,7 +480,7 @@ def main():
         save_logs(logs_moment, f"{rd}/logs_moment.npz")
 
         primary_name = "InceptionTime-Large"
-        pipeline_status["primary_model"] = "InceptionTime-Large (fallback, momentfm missing)"
+        pipeline_status["primary_model"] = f"InceptionTime-Large ({reason})"
 
     # Save primary predictions
     _, _, prim_preds, prim_targets = eval_epoch(primary_model, test_loader, criterion, device)

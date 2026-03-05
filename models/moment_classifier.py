@@ -173,20 +173,31 @@ class MOMENTClassifier(nn.Module):
         """
         Disable gradient checkpointing on the backbone to avoid NaN gradients
         when unfreezing T5 layers. Called before any backbone unfreeze.
+        Tries multiple API paths for robustness.
         """
-        try:
-            # Standard HuggingFace API
-            self.backbone.model.gradient_checkpointing_disable()
-            print("  Gradient checkpointing disabled (HF API).")
-            return
-        except AttributeError:
-            pass
-        # Manual fallback: walk all modules and disable
+        # Try 1: MOMENTPipeline is itself a PreTrainedModel
+        for candidate in [self.backbone, getattr(self.backbone, "model", None)]:
+            if candidate is None:
+                continue
+            if hasattr(candidate, "gradient_checkpointing_disable"):
+                try:
+                    candidate.gradient_checkpointing_disable()
+                    print("  Gradient checkpointing disabled (HF API).")
+                    return
+                except Exception:
+                    pass
+
+        # Try 2: set flag directly on all modules that expose it
         disabled = 0
         for mod in self.backbone.modules():
-            if hasattr(mod, "gradient_checkpointing"):
-                mod.gradient_checkpointing = False
-                disabled += 1
+            for attr in ("gradient_checkpointing", "is_gradient_checkpointing"):
+                if hasattr(mod, attr):
+                    try:
+                        setattr(mod, attr, False)
+                        disabled += 1
+                    except Exception:
+                        pass
+
         if disabled:
             print(f"  Gradient checkpointing disabled on {disabled} module(s).")
         else:

@@ -84,7 +84,7 @@ CFG = {
     "ptst_patience":        20,
 
     # Use MOMENT backbone (gradient checkpointing disabled to prevent NaN)
-    "use_moment":           True,
+    "use_moment":           False,  # MOMENT NaN issue — use InceptionTime-Large instead
 
     # MultiROCKET
     "rocket_n_kernels":     10000,
@@ -638,9 +638,9 @@ def main():
             out.append(torch.softmax(model(x, mask), dim=-1).cpu().numpy())
         return np.vstack(out)
 
-    probs_prim = get_probs(primary_model, test_loader,      device)
-    probs_ptst = get_probs(patchtst,      test_loader,      device)
-    probs_mlp  = get_probs(feat_mlp,      feat_test_loader, device)
+    probs_prim = np.nan_to_num(get_probs(primary_model, test_loader,      device), nan=1.0/NUM_CLASSES)
+    probs_ptst = np.nan_to_num(get_probs(patchtst,      test_loader,      device), nan=1.0/NUM_CLASSES)
+    probs_mlp  = np.nan_to_num(get_probs(feat_mlp,      feat_test_loader, device), nan=1.0/NUM_CLASSES)
 
     probs_ens  = (weights[0] * probs_prim + weights[1] * probs_ptst + weights[2] * probs_mlp)
     preds_ens  = probs_ens.argmax(axis=1)

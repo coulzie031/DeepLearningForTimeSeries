@@ -244,7 +244,7 @@ def main():
     if emb and lbl:
         E = np.load(emb)
         L = np.load(lbl)
-        plot_tsne(E, L, "t-SNE of embeddings", f"{rd}/fig_tsne.png")
+        plot_tsne(E, L, "t-SNE — Primary model embeddings", f"{rd}/fig_tsne.png")
     else:
         print("  [WARN] embeddings not found — skipping t-SNE.")
 
@@ -268,7 +268,7 @@ def main():
     score(f"{rd}/baseline_preds.npy", f"{rd}/baseline_targets.npy", "Baseline")
 
     # Competitor / ensemble
-    score(f"{rd}/moment_preds.npy", f"{rd}/competitor_targets.npy", "MOMENT")
+    score(f"{rd}/moment_preds.npy", f"{rd}/competitor_targets.npy", "Primary (InceptionTime-L)")
     score(f"{rd}/patchtst_preds.npy", f"{rd}/competitor_targets.npy", "PatchTST")
     score(f"{rd}/competitor_preds.npy", f"{rd}/competitor_targets.npy", "Ensemble")
 

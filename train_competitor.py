@@ -63,25 +63,28 @@ CFG = {
     "mixup_alpha":          0.3,
 
     # Training — linear probing
-    "lp_epochs":            50,     # increased: linear probing only mode
+    "lp_epochs":            50,
     "lp_lr":                1e-3,
 
-    # moment_phases: 1 = linear probing only (safe, no NaN)
-    #                2 = + gradual unfreeze (risky)
-    #                3 = + full fine-tune   (very risky)
-    "moment_phases":        1,
+    # moment_phases: 1 = linear probing only (safe)
+    #                2 = + gradual unfreeze
+    "moment_phases":        2,
 
-    # Training — gradual unfreeze
-    "gu_epochs":            30,
+    # Training — gradual unfreeze (ultra-conservative LR to avoid NaN)
+    "gu_epochs":            40,
     "gu_n_blocks":          2,
-    "gu_lr_head":           1e-3,
-    "gu_lr_enc":            1e-5,
+    "gu_lr_head":           5e-4,
+    "gu_lr_enc":            5e-7,   # very low — prevents NaN in T5 layers
 
-    # Training — full fine-tune
-    "ft_epochs":            80,
+    # Training — full fine-tune (disabled, moment_phases=2)
+    "ft_epochs":            0,
     "ft_lr_head":           5e-4,
-    "ft_lr_enc":            1e-5,
+    "ft_lr_enc":            1e-6,
     "ft_patience":          15,
+
+    # Always train InceptionTime-Large as additional ensemble member
+    "use_inception_large":  True,
+    "inception_epochs":     200,
 
     # PatchTST
     "ptst_epochs":          150,
@@ -523,6 +526,30 @@ def main():
         print(f"  [WARN] Could not extract embeddings: {e}")
 
     # ═══════════════════════════════════════════════════════════════════════════
+    # Step B2 — InceptionTime-Large (always trained as additional ensemble member)
+    # ═══════════════════════════════════════════════════════════════════════════
+    inception_large = None
+    va_f1_inception = 0.0
+    if CFG.get("use_inception_large", True):
+        print_header("Step B2: InceptionTime-Large (additional ensemble member)")
+        inception_large = InceptionTime(
+            n_channels=N_CHANNELS, num_classes=NUM_CLASSES,
+            nb_filters=64, kernel_sizes=(9, 19, 39), n_blocks=3, dropout=0.2,
+        ).to(device)
+        print(f"InceptionTime-Large: {sum(p.numel() for p in inception_large.parameters()):,} params\n")
+        logs_inc = {"train_loss": [], "val_loss": [], "train_acc": [], "val_acc": [], "val_f1": []}
+        opt_inc   = torch.optim.AdamW(inception_large.parameters(), lr=1e-3, weight_decay=1e-4)
+        sched_inc = torch.optim.lr_scheduler.CosineAnnealingLR(opt_inc, T_max=CFG["inception_epochs"], eta_min=1e-6)
+        es_inc    = EarlyStopping(patience=25, mode="max")
+        va_f1_inception = train_model(inception_large, train_loader, val_loader, opt_inc, criterion,
+                                      sched_inc, es_inc, CFG["inception_epochs"], device, logs_inc,
+                                      use_mixup=CFG["use_mixup"], mixup_alpha=CFG["mixup_alpha"])
+        torch.save(inception_large.state_dict(), f"{rd}/best_inception_large.pt")
+        _, _, inc_preds, _ = eval_epoch(inception_large, test_loader, criterion, device)
+        a_inc, f1_inc, _, _ = compute_metrics(y_test, inc_preds, le)
+        print(f"  InceptionTime-Large test — Acc: {a_inc:.4f}  Macro F1: {f1_inc:.4f}")
+
+    # ═══════════════════════════════════════════════════════════════════════════
     # Steps C/D — Feature extraction
     # ═══════════════════════════════════════════════════════════════════════════
     print_header("Steps C/D: Feature extraction")
@@ -656,12 +683,18 @@ def main():
     _, _, mlp_va_preds, mlp_va_targets = eval_epoch(feat_mlp, feat_val_loader, criterion_mlp, device)
     va_f1_mlp = f1_score(mlp_va_targets, mlp_va_preds, average="macro", zero_division=0)
 
-    print(f"  Val Macro F1 — {primary_name}: {va_f1_prim:.4f}")
-    print(f"  Val Macro F1 — PatchTST:       {va_f1_ptst:.4f}")
-    print(f"  Val Macro F1 — FeatureMLP:     {va_f1_mlp:.4f}")
-    print(f"  Val Macro F1 — Ridge(ROCKET):  {va_f1_ridge:.4f}")
+    # Val F1 per model
+    if inception_large is not None:
+        _, _, inc_va_preds, inc_va_targets = eval_epoch(inception_large, val_loader, criterion, device)
+        va_f1_inception = f1_score(inc_va_targets, inc_va_preds, average="macro", zero_division=0)
 
-    f1s     = np.array([va_f1_prim, va_f1_ptst, va_f1_mlp, va_f1_ridge])
+    print(f"  Val Macro F1 — MOMENT:              {va_f1_prim:.4f}")
+    print(f"  Val Macro F1 — InceptionTime-Large: {va_f1_inception:.4f}")
+    print(f"  Val Macro F1 — PatchTST:            {va_f1_ptst:.4f}")
+    print(f"  Val Macro F1 — FeatureMLP:          {va_f1_mlp:.4f}")
+    print(f"  Val Macro F1 — Ridge(ROCKET):       {va_f1_ridge:.4f}")
+
+    f1s     = np.array([va_f1_prim, va_f1_inception, va_f1_ptst, va_f1_mlp, va_f1_ridge])
     weights = np.exp(f1s * 10)
     weights /= weights.sum()
     print(f"  Ensemble weights: {np.round(weights, 4)}")
@@ -675,12 +708,13 @@ def main():
             out.append(torch.softmax(model(x, mask), dim=-1).cpu().numpy())
         return np.vstack(out)
 
-    probs_prim = np.nan_to_num(get_probs(primary_model, test_loader,      device), nan=1.0/NUM_CLASSES)
-    probs_ptst = np.nan_to_num(get_probs(patchtst,      test_loader,      device), nan=1.0/NUM_CLASSES)
-    probs_mlp  = np.nan_to_num(get_probs(feat_mlp,      feat_test_loader, device), nan=1.0/NUM_CLASSES)
+    probs_prim = np.nan_to_num(get_probs(primary_model,   test_loader,      device), nan=1.0/NUM_CLASSES)
+    probs_inc  = np.nan_to_num(get_probs(inception_large, test_loader,      device), nan=1.0/NUM_CLASSES) if inception_large is not None else np.full_like(probs_prim, 1.0/NUM_CLASSES)
+    probs_ptst = np.nan_to_num(get_probs(patchtst,        test_loader,      device), nan=1.0/NUM_CLASSES)
+    probs_mlp  = np.nan_to_num(get_probs(feat_mlp,        feat_test_loader, device), nan=1.0/NUM_CLASSES)
     probs_ridg = np.nan_to_num(ridge_te_probs, nan=1.0/NUM_CLASSES) if ridge_te_probs is not None else np.full_like(probs_prim, 1.0/NUM_CLASSES)
 
-    probs_ens  = (weights[0] * probs_prim + weights[1] * probs_ptst + weights[2] * probs_mlp + weights[3] * probs_ridg)
+    probs_ens  = (weights[0] * probs_prim + weights[1] * probs_inc + weights[2] * probs_ptst + weights[3] * probs_mlp + weights[4] * probs_ridg)
     preds_ens  = probs_ens.argmax(axis=1)
 
     acc_ens, f1_ens, report_ens, cm_ens = compute_metrics(y_test, preds_ens, le)

@@ -409,6 +409,7 @@ def main():
         # Save (save_pretrained for peft model if possible, else state_dict)
         try:
             torch.save(moment.state_dict(), f"{rd}/best_moment_lora.pt")
+            torch.save(moment.state_dict(), f"{rd}/best_moment.pt")  # for evaluate.py
         except Exception:
             torch.save({"head": moment.head.state_dict()}, f"{rd}/best_moment_lora.pt")
         save_logs(logs_moment, f"{rd}/logs_moment.npz")

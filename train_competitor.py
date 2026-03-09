@@ -93,6 +93,8 @@ CFG = {
 
     # Use MOMENT backbone
     "use_moment":           True,   # linear probing only (moment_phases=1) → no NaN
+    # MOMENT contributes via embeddings in FeatureMLP — excluded from direct soft-vote
+    "moment_embed_only":    True,
 
     # MultiROCKET
     "rocket_n_kernels":     10000,
@@ -694,7 +696,11 @@ def main():
     print(f"  Val Macro F1 — FeatureMLP:          {va_f1_mlp:.4f}")
     print(f"  Val Macro F1 — Ridge(ROCKET):       {va_f1_ridge:.4f}")
 
-    f1s     = np.array([va_f1_prim, va_f1_inception, va_f1_ptst, va_f1_mlp, va_f1_ridge])
+    # If MOMENT is used as embed-only (no direct vote), set its f1 weight to 0
+    f1_prim_vote = 0.0 if (primary_name == "MOMENT" and CFG.get("moment_embed_only", False)) else va_f1_prim
+    if CFG.get("moment_embed_only", False) and primary_name == "MOMENT":
+        print(f"  [INFO] MOMENT excluded from direct vote (embed-only mode) — contributes via FeatureMLP embeddings.")
+    f1s     = np.array([f1_prim_vote, va_f1_inception, va_f1_ptst, va_f1_mlp, va_f1_ridge])
     weights = np.exp(f1s * 10)
     weights /= weights.sum()
     print(f"  Ensemble weights: {np.round(weights, 4)}")

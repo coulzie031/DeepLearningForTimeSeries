@@ -68,7 +68,7 @@ CFG = {
 
     # moment_phases: 1 = linear probing only (safe)
     #                2 = + gradual unfreeze
-    "moment_phases":        2,
+    "moment_phases":        1,   # phase 2 causes NaN → stick to linear probing
 
     # Training — gradual unfreeze (ultra-conservative LR to avoid NaN)
     "gu_epochs":            40,
@@ -94,7 +94,7 @@ CFG = {
     # Use MOMENT backbone
     "use_moment":           True,   # linear probing only (moment_phases=1) → no NaN
     # MOMENT contributes via embeddings in FeatureMLP — excluded from direct soft-vote
-    "moment_embed_only":    True,
+    "moment_embed_only":    False,  # MOMENT votes directly (phase 1 = stable ~0.55)
 
     # MultiROCKET
     "rocket_n_kernels":     10000,

@@ -261,6 +261,15 @@ def apply_lora_to_moment(moment_model, cfg):
     # Apply LoRA to the T5 model inside MOMENTPipeline
     # MOMENTPipeline wraps a T5 model at .model attribute
     inner_model = getattr(moment_model.backbone, "model", moment_model.backbone)
+
+    # Fix: peft expects config.get() but momentfm uses NamespaceWithDefaults (no .get method)
+    # Monkey-patch .get() so peft can query tie_word_embeddings etc.
+    for obj in [inner_model, getattr(inner_model, "model", None)]:
+        if obj is not None and hasattr(obj, "config") and not callable(getattr(obj.config, "get", None)):
+            cfg_obj = obj.config
+            cfg_obj.get = lambda key, default=None, _cfg=cfg_obj: getattr(_cfg, key, default)
+            print(f"  [fix] Patched .get() on {type(cfg_obj).__name__}")
+
     peft_model = get_peft_model(inner_model, lora_config)
     peft_model.print_trainable_parameters()
 

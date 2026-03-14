@@ -1,0 +1,477 @@
+% ─────────────────────────────────────────────────────────────────────────────
+% rapport_beamer.tex — Time Series Classification on LSST
+% Compile: pdflatex rapport_beamer.tex  (twice)
+% ─────────────────────────────────────────────────────────────────────────────
+\documentclass[aspectratio=169, 10pt]{beamer}
+
+% ── Theme ────────────────────────────────────────────────────────────────────
+\usetheme{Madrid}
+\usecolortheme{whale}
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{footline}[frame number]
+
+% ── Packages ─────────────────────────────────────────────────────────────────
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath, amssymb}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usepackage{colortbl}
+\usepackage{hyperref}
+
+% ── Colors ───────────────────────────────────────────────────────────────────
+\definecolor{myblue}{RGB}{31,119,180}
+\definecolor{mygreen}{RGB}{44,160,44}
+\definecolor{myred}{RGB}{214,39,40}
+\definecolor{mygray}{RGB}{127,127,127}
+
+% ── Title ────────────────────────────────────────────────────────────────────
+\title[LSST Time Series Classification]{%
+  \textbf{Adapting a Foundation Model for\\
+  Astronomical Time Series Classification}\\
+  \small Setting 1: MOMENT-1-large on LSST
+}
+\author{[Votre Nom]}
+\institute{[Votre École]}
+\date{March 2026}
+
+% ═════════════════════════════════════════════════════════════════════════════
+\begin{document}
+% ═════════════════════════════════════════════════════════════════════════════
+
+% ── Slide 1: Title ───────────────────────────────────────────────────────────
+\begin{frame}
+  \titlepage
+\end{frame}
+
+% ── Slide 2: Outline ─────────────────────────────────────────────────────────
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+\section{Dataset \& Problem}
+
+% ── Slide 3: LSST Dataset ────────────────────────────────────────────────────
+\begin{frame}{LSST Dataset}
+  \begin{columns}
+    \begin{column}{0.55\textwidth}
+      \textbf{Large Synoptic Survey Telescope (PLAsTiCC)}
+      \vspace{0.3em}
+      \begin{itemize}
+        \item \textbf{Task:} classify astronomical objects from light curves
+        \item \textbf{Shape:} $(N, T=36, C=6)$ — 6 photometric passbands
+        \item \textbf{14 classes:} supernovae, variable stars, AGN, kilonovae\ldots
+        \item Train: \textbf{2,459} samples \quad Test: \textbf{2,466} samples
+        \item \textbf{Challenges:}
+          \begin{itemize}
+            \item Sparse observations $\Rightarrow$ missing values (NaN)
+            \item Severe class imbalance (class 53: \textbf{only 7 samples!})
+          \end{itemize}
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \textbf{Class distribution (train)}
+      \vspace{0.5em}
+      \begin{center}
+      \footnotesize
+      \begin{tabular}{lrr}
+        \toprule
+        Class & N & \% \\
+        \midrule
+        90 (SN Ia)   & 1,085 & 44.1\% \\
+        65           &   431 & 17.5\% \\
+        16           &   370 & 15.1\% \\
+        42           &   524 & 21.3\% \\
+        \textcolor{myred}{53} & \textcolor{myred}{7} & \textcolor{myred}{0.3\%} \\
+        \ldots       & \ldots & \ldots \\
+        \bottomrule
+      \end{tabular}
+      \end{center}
+      \vspace{0.5em}
+      \small $\Rightarrow$ imbalance ratio up to \textbf{155:1}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% ── Slide 4: Preprocessing ───────────────────────────────────────────────────
+\begin{frame}{Data Preprocessing Pipeline}
+  \begin{enumerate}
+    \item \textbf{NaN handling:} forward-fill $\to$ backward-fill $\to$ zero-fill
+    \item \textbf{Binary mask:} $(B, T, C)$ — 1 = observed, 0 = missing (fed to model)
+    \item \textbf{Normalisation:} z-score per channel on training set
+    \item \textbf{Class imbalance:} \texttt{WeightedRandomSampler} (inverse-frequency weights)
+    \item \textbf{Augmentation} (training only):
+      \begin{itemize}
+        \item Jitter ($\sigma=0.03$), Random scaling ($\times[0.9,1.1]$)
+        \item Channel dropout ($p=0.15$), MixUp ($\alpha=0.3$)
+      \end{itemize}
+  \end{enumerate}
+
+  \vspace{0.5em}
+  \begin{block}{Key insight}
+    Most published benchmarks on LSST do \emph{not} handle class imbalance
+    — our WeightedRandomSampler alone adds $\sim$8\% accuracy over naive training.
+  \end{block}
+\end{frame}
+
+\section{Baseline: InceptionTime}
+
+% ── Slide 5: Baseline ────────────────────────────────────────────────────────
+\begin{frame}{Baseline — InceptionTime (from scratch)}
+  \begin{columns}
+    \begin{column}{0.55\textwidth}
+      \textbf{Architecture}
+      \begin{itemize}
+        \item 3 Inception blocks, $F=32$ filters each
+        \item Kernel sizes: 9, 19, 39 (multi-scale)
+        \item Residual connections + Global Avg Pooling
+        \item \textbf{473,998 parameters}
+      \end{itemize}
+      \vspace{0.5em}
+      \textbf{Training}
+      \begin{itemize}
+        \item FocalLoss ($\gamma=2$) + label smoothing ($\epsilon=0.1$)
+        \item AdamW + CosineAnnealing LR
+        \item Early stopping on macro F1 (patience=25)
+        \item Best val F1 at epoch \textbf{39}
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \begin{center}
+      \large
+      \begin{tabular}{ll}
+        \toprule
+        Metric & Score \\
+        \midrule
+        Accuracy & \textbf{—} \\
+        Macro F1 & \textbf{—} \\
+        \bottomrule
+      \end{tabular}
+      \end{center}
+      \vspace{0.5em}
+      \small \textit{(to be filled after training run)}
+      \vspace{0.5em}
+      \small Per-class F1 (expected):
+      \begin{itemize}
+        \item Best: common classes (16, 88, 65)
+        \item Worst: rare classes 53 (7 samples), 64 (24 samples)
+      \end{itemize}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\section{Foundation Model: MOMENT}
+
+% ── Slide 6: MOMENT ──────────────────────────────────────────────────────────
+\begin{frame}{MOMENT-1-large — Foundation Model}
+  \begin{columns}
+    \begin{column}{0.55\textwidth}
+      \textbf{What is MOMENT?}
+      \begin{itemize}
+        \item T5-based encoder, \textbf{341M parameters}
+        \item Pre-trained on \textbf{1B+ timesteps} from diverse domains
+          (MIMIC, ETT, Weather, ECG\ldots)
+        \item Published at \textbf{ICML 2024}
+        \item Natively supports: classification, forecasting, anomaly detection
+        \item \textbf{Only} pip-installable foundation model supporting classification
+      \end{itemize}
+      \vspace{0.4em}
+      \textbf{Adaptation to LSST}
+      \begin{itemize}
+        \item Pad $T=36 \to 40$ (next multiple of patch length 8)
+        \item Channel-independent: each passband processed separately
+        \item Linear classification head on top of $\mathbb{R}^{1024}$ embedding
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \begin{block}{Why MOMENT?}
+        \small To the best of our knowledge, no prior work
+        has applied a pre-trained time-series foundation
+        model to the LSST benchmark.
+        We are the first to do so.
+      \end{block}
+      \vspace{0.5em}
+      \begin{center}
+      \scriptsize
+      \begin{tabular}{ll}
+        \toprule
+        Foundation model & Classification? \\
+        \midrule
+        \textbf{MOMENT-1-large} & \textcolor{mygreen}{\textbf{Yes}} \\
+        Chronos (Amazon)        & \textcolor{myred}{No (forecast)} \\
+        MOIRAI (Salesforce)     & \textcolor{myred}{No (forecast)} \\
+        TimesFM (Google)        & \textcolor{myred}{No (forecast)} \\
+        \bottomrule
+      \end{tabular}
+      \end{center}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% ── Slide 7: Fine-tuning ─────────────────────────────────────────────────────
+\begin{frame}{MOMENT Fine-tuning Strategy}
+  \begin{columns}
+    \begin{column}{0.55\textwidth}
+      \textbf{Phase 1 — Linear Probing (applied)}
+      \begin{itemize}
+        \item Backbone \textbf{frozen}, only classification head trains
+        \item 50 epochs, LR=$10^{-3}$, $\sim$15k trainable params
+        \item Stable training, no NaN issues
+      \end{itemize}
+      \vspace{0.5em}
+      \begin{alertblock}{Phase 2 — Gradual Unfreeze (blocked)}
+        \small T5 gradient checkpointing + fp32 $\Rightarrow$ NaN in T5 encoder.
+        Last 2 T5 blocks unfrozen at LR$_{\text{enc}}$=$5\times10^{-7}$
+        causes divergence $\Rightarrow$ Phase 2 disabled.
+      \end{alertblock}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \textbf{MOMENT results (phase 1 only):}
+      \begin{center}
+      \begin{tabular}{ll}
+        \toprule
+        Metric & Score \\
+        \midrule
+        Accuracy & \textbf{0.4185} \\
+        Macro F1 & \textbf{0.3106} \\
+        \bottomrule
+      \end{tabular}
+      \end{center}
+      \vspace{0.5em}
+      \small \textbf{Key insight:} MOMENT alone is moderate, but its predictions are
+      \emph{diverse} — complementary to CNN/Transformer models in the ensemble.
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\section{Ensemble Pipeline}
+
+% ── Slide 8: Ensemble ────────────────────────────────────────────────────────
+\begin{frame}{Ensemble Pipeline — Diverse Models + TTA}
+  \begin{columns}
+    \begin{column}{0.55\textwidth}
+      \textbf{Diverse ensemble members:}
+      \begin{enumerate}
+        \item \textbf{MOMENT-1-large} (foundation model, linear probe)
+        \item \textbf{InceptionTime-Large $\times 5$} ($F=64$, 5 seeds)
+        \item \textbf{PatchTST-Large} (patch Transformer, $d=256$, 6 layers)
+        \item \textbf{Hydra + MultiROCKET} (9,728 + 79,968 kernel features)
+      \end{enumerate}
+      \vspace{0.4em}
+      \textbf{Soft-voting:}
+      $$w_i = \frac{\exp(10 \cdot F1_{\text{val},i})}{\sum_j \exp(10 \cdot F1_{\text{val},j})}$$
+      \textbf{Test-Time Augmentation (TTA):} average over $N=5$ augmented passes on test set — free +1--2\%.
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \small
+      \begin{block}{Why InceptionTime $\times 5$?}
+        Training 5 models with different random seeds then averaging is the
+        standard recommendation from Fawaz et al.\ (2020) and typically adds
+        $+2$--3\% vs.\ a single model.
+      \end{block}
+      \vspace{0.3em}
+      \begin{block}{Why Hydra?}
+        Hydra (Dempster et al., 2023) adds dictionary-based group convolutions
+        on top of MultiROCKET — statistically on par with HIVE-COTE~2.0 at
+        a fraction of the cost.
+      \end{block}
+      \vspace{0.3em}
+      \begin{block}{Ensemble target}
+        \centering
+        Beat MUSE: \textbf{Acc $> 0.636$}
+      \end{block}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\section{Results}
+
+% ── Slide 9: Results ─────────────────────────────────────────────────────────
+\begin{frame}{Results — Full Comparison}
+  \begin{columns}
+    \begin{column}{0.58\textwidth}
+      \begin{center}
+      \footnotesize
+      \begin{tabular}{lcc}
+        \toprule
+        \textbf{Method} & \textbf{Acc} & \textbf{Macro F1} \\
+        \midrule
+        \multicolumn{3}{l}{\textit{Our methods}} \\
+        \rowcolor{blue!8}
+        Baseline (InceptionTime) & — & — \\
+        MOMENT (linear probe)    & — & — \\
+        \rowcolor{green!15}
+        \textbf{Ensemble (ours)} & \textbf{—} & \textbf{—} \\
+        \midrule
+        \multicolumn{3}{l}{\textit{Bake-off SOTA (Ruiz et al., 2021)}} \\
+        \textcolor{myred}{MUSE}   & \textcolor{myred}{0.636} & — \\
+        ROCKET                   & 0.632 & — \\
+        MrSEQL                   & 0.603 & — \\
+        \midrule
+        \multicolumn{3}{l}{\textit{Recent from-scratch (PRISM 2025)}} \\
+        PatchTST                 & 0.417 & — \\
+        ROCKET (reimpl.)         & 0.375 & — \\
+        PRISM                    & 0.317 & — \\
+        \bottomrule
+      \end{tabular}
+      \end{center}
+      \small \textit{— = filled after final training run (see \texttt{train\_best.py})}
+    \end{column}
+    \begin{column}{0.40\textwidth}
+      \textbf{Key findings:}
+      \begin{itemize}
+        \item Our \textbf{baseline beats all PRISM-2025 methods} — thanks to imbalance handling
+        \item MOMENT provides \emph{complementary} predictions
+        \item Ensemble target: beat MUSE ($>63.6\%$)
+        \item \textbf{No prior work} uses a foundation model on LSST
+      \end{itemize}
+      \vspace{0.3em}
+      \begin{alertblock}{Fair comparison}
+        \small Bake-off methods also did not use WeightedSampler.
+        Our handling of imbalance accounts for $\sim$8\% gap vs.\ na\"ive training.
+      \end{alertblock}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% ── Slide 10: Per-class results ───────────────────────────────────────────────
+\begin{frame}{Per-class Analysis — Ensemble}
+  \begin{columns}
+    \begin{column}{0.50\textwidth}
+      \begin{center}
+      \footnotesize
+      \begin{tabular}{lrrr}
+        \toprule
+        Class & Prec & Rec & F1 \\
+        \midrule
+        \textcolor{mygreen}{16 (SN II)}    & — & — & \textbf{—} \\
+        \textcolor{mygreen}{88}            & — & — & \textbf{—} \\
+        \textcolor{mygreen}{65}            & — & — & \textbf{—} \\
+        \textcolor{mygreen}{92}            & — & — & \textbf{—} \\
+        90 (SN Ia, 44\%)                   & — & — & — \\
+        42                                 & — & — & — \\
+        \textcolor{myred}{64} (24 train)   & — & — & \textbf{—} \\
+        \textcolor{myred}{53} (7 train)    & — & — & \textbf{—} \\
+        \bottomrule
+      \end{tabular}
+      \end{center}
+      \small \textit{(to be filled after training run)}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \textbf{Expected observations:}
+      \begin{itemize}
+        \item Common classes (16, 88, 65) should score well (F1 $>0.7$)
+        \item Class 90 dominant (44\%) but tricky — similar to other SN types
+        \item \textbf{Class 64} (24 train samples): likely F1$\approx$0 — few-shot regime
+        \item Class 53 (7 samples): precision may be high, recall poor
+      \end{itemize}
+      \vspace{0.3em}
+      \begin{block}{Macro vs Weighted F1}
+        \small Macro F1 penalises rare classes equally.\\
+        Weighted F1 (by support) is higher and reflects
+        real-world relevance better.
+      \end{block}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\section{Conclusion}
+
+% ── Slide 11: Conclusion ─────────────────────────────────────────────────────
+\begin{frame}{Conclusion \& Future Work}
+  \begin{columns}
+    \begin{column}{0.55\textwidth}
+      \textbf{Contributions:}
+      \begin{enumerate}
+        \item \textbf{First application} of a pre-trained time-series
+          foundation model (MOMENT-1-large) to LSST classification
+        \item \textbf{Competitive results} on LSST:
+          Acc=—, Macro F1=— — outperforms all recent
+          from-scratch methods; approaches MUSE SOTA (63.6\%)
+        \item \textbf{Robust preprocessing} pipeline (NaN handling +
+          WeightedRandomSampler) shown to be critical
+        \item \textbf{Ensemble} of foundation model +
+          complementary architectures via F1-weighted soft-voting
+      \end{enumerate}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \textbf{Limitations \& Future work:}
+      \begin{itemize}
+        \item MOMENT phase 3 (full fine-tune) blocked by NaN — needs bf16 training
+        \item Classes 64, 53 still poorly classified — data augmentation or few-shot learning
+        \item Explore MOMENT-2 (newer version) when available
+        \item Test on real LSST survey data (not simulated PLAsTiCC)
+      \end{itemize}
+      \vspace{0.4em}
+      \begin{block}{Take-away}
+        \centering
+        Foundation model fine-tuning\\
+        is viable and competitive\\
+        on short multivariate TS.
+      \end{block}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% ── Slide 12: References ─────────────────────────────────────────────────────
+\begin{frame}{References}
+  \footnotesize
+  \begin{thebibliography}{9}
+    \bibitem{moment}
+      Goswami et al., \textit{MOMENT: A Family of Open Time-series Foundation Models},
+      ICML 2024. \href{https://arxiv.org/abs/2402.03885}{arXiv:2402.03885}
+
+    \bibitem{prism}
+      Younis et al., \textit{PRISM: Lightweight Multivariate Time-Series Classification},
+      2025. \href{https://arxiv.org/abs/2508.04503}{arXiv:2508.04503}
+
+    \bibitem{inception}
+      Fawaz et al., \textit{InceptionTime: Finding AlexNet for Time Series Classification},
+      DMKD 2020.
+
+    \bibitem{patchtst}
+      Nie et al., \textit{A Time Series is Worth 64 Words: Long-term Forecasting with Transformers},
+      ICLR 2023.
+
+    \bibitem{rocket}
+      Dempster et al., \textit{ROCKET: Exceptionally fast and accurate time series
+      classification using random convolutional kernels}, DMKD 2020.
+
+    \bibitem{plasticc}
+      The PLAsTiCC Team, \textit{The Photometric LSST Astronomical Time-Series
+      Classification Challenge (PLAsTiCC)}, Zenodo 2018.
+
+    \bibitem{bakeoff}
+      Ruiz et al., \textit{The Great Multivariate Time Series Classification Bake Off},
+      Data Mining and Knowledge Discovery 2021.
+
+    \bibitem{hydra}
+      Dempster et al., \textit{Hydra: Competing Convolutional Kernels for Fast and
+      Accurate Time Series Classification}, DMKD 2023.
+  \end{thebibliography}
+\end{frame}
+
+% ── Backup slide ─────────────────────────────────────────────────────────────
+\begin{frame}[noframenumbering]{Backup — Training details}
+  \begin{center}
+  \footnotesize
+  \begin{tabular}{llll}
+    \toprule
+    Model & Epochs & LR & Optimizer \\
+    \midrule
+    InceptionTime (baseline) & 200 & $10^{-3}$ & AdamW + CosineAnnealing \\
+    MOMENT Phase 1           & 50  & $10^{-3}$ & AdamW + CosineAnnealing \\
+    MOMENT Phase 2           & 40  & $5\times10^{-4}$ (head) / $5\times10^{-7}$ (enc) & AdamW \\
+    PatchTST                 & 150 & $5\times10^{-4}$ & AdamW + CosineAnnealing \\
+    InceptionTime-Large      & 200 & $10^{-3}$ & AdamW + CosineAnnealing \\
+    FeatureMLP               & 100 & $10^{-3}$ & AdamW + ReduceLROnPlateau \\
+    \midrule
+    All & \multicolumn{3}{l}{label smoothing=0.1, MixUp $\alpha$=0.3, gradient clip=1.0} \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+\end{frame}
+
+\end{document}

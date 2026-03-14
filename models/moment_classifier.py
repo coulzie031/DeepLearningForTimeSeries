@@ -21,6 +21,7 @@ import torch.nn.functional as F
 
 MOMENT_PATCH_LEN  = 8      # MOMENT-1-large uses 8-length patches
 MOMENT_D_MODEL    = 1024   # MOMENT-1-large embedding dimension
+MOMENT_EMB_DIM    = 2 * MOMENT_D_MODEL   # mean + max concat → 2048
 LSST_SEQ_LEN      = 36
 # Pad LSST (T=36) to next multiple of MOMENT_PATCH_LEN = 40
 MOMENT_SEQ_LEN    = ((LSST_SEQ_LEN + MOMENT_PATCH_LEN - 1) // MOMENT_PATCH_LEN) * MOMENT_PATCH_LEN
@@ -58,14 +59,17 @@ class MOMENTClassifier(nn.Module):
         self.model_name   = model_name
         self._loaded      = False
 
-        # Classification head — will use MOMENT_D_MODEL once backbone loaded
+        # Classification head — takes mean+max concat embedding (2048)
         self.head = nn.Sequential(
-            nn.LayerNorm(MOMENT_D_MODEL),
+            nn.LayerNorm(MOMENT_EMB_DIM),
             nn.Dropout(dropout),
-            nn.Linear(MOMENT_D_MODEL, 256),
+            nn.Linear(MOMENT_EMB_DIM, 512),
             nn.GELU(),
             nn.Dropout(dropout),
-            nn.Linear(256, num_classes),
+            nn.Linear(512, 128),
+            nn.GELU(),
+            nn.Dropout(dropout / 2),
+            nn.Linear(128, num_classes),
         )
         self._init_head()
 
@@ -326,15 +330,22 @@ class MOMENTClassifier(nn.Module):
 
     def encode(self, x, mask=None):
         """
-        Return MOMENT embeddings (B, d_model) — used for t-SNE.
+        Return MOMENT embeddings (B, 2*d_model) — mean+max concat over patches/channels.
+        Richer than plain mean: preserves peak activations per patch position.
         """
         x_enc, input_mask = self._prepare(x, mask)
         out = self.backbone(x_enc=x_enc, input_mask=input_mask)
         emb = out.embeddings.float()                    # ensure fp32
-        emb = torch.nan_to_num(emb, nan=0.0, posinf=100.0, neginf=-100.0)  # kill any NaN/Inf
+        emb = torch.nan_to_num(emb, nan=0.0, posinf=100.0, neginf=-100.0)
         if emb.dim() == 3:
-            emb = emb.mean(dim=1)                       # mean over patches
-        return emb                                      # (B, d_model)
+            # emb: (B, P, d_model) where P = n_patches (or n_channels)
+            emb_mean = emb.mean(dim=1)                  # (B, d_model)
+            emb_max  = emb.max(dim=1).values            # (B, d_model)
+            emb = torch.cat([emb_mean, emb_max], dim=1) # (B, 2*d_model)
+        elif emb.dim() == 2:
+            # already (B, d_model) — pad with zeros to keep dim consistent
+            emb = torch.cat([emb, emb], dim=1)          # (B, 2*d_model)
+        return emb                                      # (B, MOMENT_EMB_DIM=2048)
 
     def forward(self, x, mask=None):
         """

@@ -43,9 +43,14 @@ def load_lsst():
         ds = UCR_UEA_datasets()
         X_train, y_train, X_test, y_test = ds.load_dataset("LSST")
     except ImportError:
-        from aeon.datasets import load_classification
-        X_train, y_train = load_classification("LSST", split="train")
-        X_test,  y_test  = load_classification("LSST", split="test")
+        try:
+            from aeon.datasets import load_classification
+            X_train, y_train = load_classification("LSST", split="train")
+            X_test,  y_test  = load_classification("LSST", split="test")
+        except ImportError:
+            from sktime.datasets import load_UCR_UEA_dataset
+            X_train, y_train = load_UCR_UEA_dataset("LSST", split="train", return_type="numpy3d")
+            X_test,  y_test  = load_UCR_UEA_dataset("LSST", split="test",  return_type="numpy3d")
         X_train = X_train.transpose(0, 2, 1)  # (N,C,T) → (N,T,C)
         X_test  = X_test.transpose(0, 2, 1)
 

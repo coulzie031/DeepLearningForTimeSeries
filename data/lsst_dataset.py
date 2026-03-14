@@ -38,10 +38,16 @@ def load_lsst():
     y_test      : (M,)      int
     le          : LabelEncoder (le.classes_ = original str labels)
     """
-    from tslearn.datasets import UCR_UEA_datasets
-
-    ds = UCR_UEA_datasets()
-    X_train, y_train, X_test, y_test = ds.load_dataset("LSST")
+    try:
+        from tslearn.datasets import UCR_UEA_datasets
+        ds = UCR_UEA_datasets()
+        X_train, y_train, X_test, y_test = ds.load_dataset("LSST")
+    except ImportError:
+        from aeon.datasets import load_classification
+        X_train, y_train = load_classification("LSST", split="train")
+        X_test,  y_test  = load_classification("LSST", split="test")
+        X_train = X_train.transpose(0, 2, 1)  # (N,C,T) → (N,T,C)
+        X_test  = X_test.transpose(0, 2, 1)
 
     X_train = X_train.astype(np.float32)
     X_test  = X_test.astype(np.float32)

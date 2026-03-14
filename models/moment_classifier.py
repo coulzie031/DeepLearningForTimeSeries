@@ -115,6 +115,8 @@ class MOMENTClassifier(nn.Module):
         self.backbone.init()
         # Force fp32 — MOMENT loads in bfloat16 on some CUDA configs which causes NaN
         self.backbone = self.backbone.float()
+        # Move backbone to the correct device (must be done after init())
+        self.backbone = self.backbone.to(device)
         self._loaded = True
 
         n_total = sum(p.numel() for p in self.backbone.parameters())

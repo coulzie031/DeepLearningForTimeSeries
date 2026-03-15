@@ -121,7 +121,7 @@ class ChronosClassifier(nn.Module):
             xc = x[:, :, c].cpu().float()   # (B, T) — tokenizer needs CPU
 
             # Chronos tokenization
-            input_ids, attention_mask, _ = self.pipeline.tokenizer.input_transform(xc)
+            input_ids, attention_mask, _ = self.pipeline.tokenizer._input_transform(xc)
             input_ids      = input_ids.to(self._device)
             attention_mask = attention_mask.to(self._device)
 

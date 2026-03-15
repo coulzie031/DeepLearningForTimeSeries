@@ -50,7 +50,7 @@ rapport_beamer.pdf     ← compiled PDF report
 figures/               ← figures used in the report
 models/                ← ChronosClassifier, MOMENTClassifier, InceptionTime, PatchTST
 data/                  ← LSST dataset loader
-utils.py               ← training utilities (train_epoch, eval_epoch, EarlyStopping)
+archive/utils.py       ← training utilities (train_epoch, eval_epoch, EarlyStopping)
 cours/                 ← course notebooks (01–06)
 archive/               ← old training scripts
 ```

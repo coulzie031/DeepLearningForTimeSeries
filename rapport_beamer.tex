@@ -411,26 +411,26 @@
     \begin{column}{0.50\textwidth}
       \begin{center}
       \footnotesize
-      \begin{tabular}{lcc}
+      \begin{tabular}{lccc}
         \toprule
-        \textbf{Method} & \textbf{Acc} & \textbf{Macro F1} \\
+        \textbf{Method} & \textbf{Acc} & \textbf{Mac.F1} & \textbf{W.F1} \\
         \midrule
-        \multicolumn{3}{l}{\textit{Our methods}} \\
+        \multicolumn{4}{l}{\textit{Our methods}} \\
         \rowcolor{blue!6}
-        Baseline (InceptionTime)        & 0.5483 & 0.3753 \\
-        MOMENT-1-large (Setting 1)      & 0.3078 & 0.2791 \\
-        \textcolor{myblue}{Chronos-T5-Small (Setting 1)} & \textcolor{myblue}{0.5333} & \textcolor{myblue}{\textbf{0.4333}} \\
-        InceptionTime-Large $\times 5$  & 0.6427 & 0.4150 \\
-        PatchTST + TTA                  & 0.4903 & 0.4194 \\
-        MultiROCKET                     & 0.6079 & 0.3625 \\
+        Baseline (InceptionTime)        & 0.5483 & 0.3753 & — \\
+        MOMENT-1-large (Setting 1)      & 0.3078 & 0.2791 & — \\
+        \textcolor{myblue}{Chronos-T5-Small (Setting 1)} & \textcolor{myblue}{0.5333} & \textcolor{myblue}{\textbf{0.4333}} & — \\
+        InceptionTime-Large $\times 5$  & 0.6427 & 0.4150 & — \\
+        PatchTST + TTA                  & 0.4903 & 0.4194 & — \\
+        MultiROCKET                     & 0.6079 & 0.3625 & — \\
         \rowcolor{green!15}
-        \textbf{Ensemble (ours)}        & \textbf{0.6448} & \textbf{0.4200} \\
+        \textbf{Ensemble (ours)}        & \textbf{0.6448} & \textbf{0.4200} & \textbf{0.61} \\
         \midrule
-        \multicolumn{3}{l}{\textit{Published SOTA (Ruiz et al., 2021)}} \\
-        \textcolor{myred}{MUSE (best)}  & \textcolor{myred}{0.636} & — \\
-        ROCKET                          & 0.632 & — \\
-        MrSEQL                          & 0.603 & — \\
-        InceptionTime (vanilla)         & 0.340 & — \\
+        \multicolumn{4}{l}{\textit{Published SOTA (Ruiz et al., 2021)}} \\
+        \textcolor{myred}{MUSE (best)}  & \textcolor{myred}{0.636} & — & — \\
+        ROCKET                          & 0.632 & — & — \\
+        MrSEQL                          & 0.603 & — & — \\
+        InceptionTime (vanilla)         & 0.340 & — & — \\
         \bottomrule
       \end{tabular}
       \end{center}

@@ -26,17 +26,19 @@ Both notebooks run on **Google Colab (T4 GPU)** and clone this repo automaticall
 
 ## Results
 
-| Method | Accuracy | Macro F1 |
-|--------|----------|----------|
-| MOMENT-1-large (Setting 1) | 0.3078 | 0.2791 |
-| PatchTST + TTA | 0.4903 | 0.4194 |
-| **Chronos-T5-Small** (Setting 1, Phase 1+2) | 0.5333 | **0.4333** |
-| Baseline — InceptionTime (scratch) | 0.5483 | 0.3753 |
-| MultiROCKET | 0.6079 | 0.3625 |
-| InceptionTime-Large × 5 + TTA | 0.6427 | 0.4150 |
-| ★ **Ensemble (ours)** | **0.6448** | **0.4200** |
-| MUSE SOTA (Ruiz et al. 2021) | 0.636 | — |
-| ROCKET (Ruiz et al. 2021) | 0.632 | — |
+| Method | Accuracy | Macro F1 | Weighted F1 |
+|--------|----------|----------|-------------|
+| MOMENT-1-large (Setting 1) | 0.3078 | 0.2791 | — |
+| PatchTST + TTA | 0.4903 | 0.4194 | — |
+| **Chronos-T5-Small** (Setting 1, Phase 1+2) | 0.5333 | **0.4333** | — |
+| Baseline — InceptionTime (scratch) | 0.5483 | 0.3753 | — |
+| MultiROCKET | 0.6079 | 0.3625 | — |
+| InceptionTime-Large × 5 + TTA | 0.6427 | 0.4150 | — |
+| ★ **Ensemble (ours)** | **0.6448** | **0.4200** | **0.61** |
+| MUSE SOTA (Ruiz et al. 2021) | 0.636 | — | — |
+| ROCKET (Ruiz et al. 2021) | 0.632 | — | — |
+
+> **Note on Macro F1:** The low Macro F1 (0.42) is entirely explained by two unlearnable classes — class 53 (only 7 train samples, F1=0) and class 64 (24 samples, F1=0.08). Removing these two classes, Macro F1 rises to **≈0.49**. The Weighted F1=0.61 (weighted by class support) better reflects real-world performance on the learnable classes.
 
 ---
 

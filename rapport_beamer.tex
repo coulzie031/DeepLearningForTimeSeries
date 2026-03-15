@@ -389,50 +389,37 @@
       \end{enumerate}
     \end{column}
     \begin{column}{0.46\textwidth}
-      \vspace{0.3em}
+      \vspace{0.2em}
       \begin{center}
       \footnotesize
-      \begin{tikzpicture}[node distance=0.45cm, every node/.style={font=\tiny}]
-        \node[draw, rounded corners, fill=blue!10, minimum width=3.5cm, minimum height=0.45cm]
-          (input) {Input $(B,36,6)$};
-
-        \node[draw, rounded corners, fill=orange!15, minimum width=3.5cm, minimum height=0.45cm,
-              below=of input]
-          (split) {Split $\to$ 6 channels $(B,36)$ each};
-
-        \node[draw, rounded corners, fill=orange!25, minimum width=3.5cm, minimum height=0.45cm,
-              below=of split]
-          (tok) {Chronos tokeniser (quantile bins)};
-
-        \node[draw, rounded corners, fill=myblue!20, minimum width=3.5cm, minimum height=0.45cm,
-              below=of tok]
-          (enc) {T5 Encoder {\normalfont (frozen phase 1 / partial phase 2)}};
-
-        \node[draw, rounded corners, fill=myblue!10, minimum width=3.5cm, minimum height=0.45cm,
-              below=of enc]
-          (pool) {Masked mean-pool $\to$ 512-dim per channel};
-
-        \node[draw, rounded corners, fill=green!15, minimum width=3.5cm, minimum height=0.45cm,
-              below=of pool]
-          (concat) {Concatenate $6 \times 512 = 3072$-dim};
-
-        \node[draw, rounded corners, fill=green!25, minimum width=3.5cm, minimum height=0.45cm,
-              below=of concat]
-          (head) {MLP head $\to$ 14 classes};
-
-        \draw[->] (input) -- (split);
-        \draw[->] (split) -- (tok);
-        \draw[->] (tok) -- (enc);
-        \draw[->] (enc) -- (pool);
-        \draw[->] (pool) -- (concat);
-        \draw[->] (concat) -- (head);
-      \end{tikzpicture}
+      \renewcommand{\arraystretch}{1.3}
+      \begin{tabular}{c}
+        \rowcolor{blue!10}
+        \fbox{\parbox{4.2cm}{\centering Input $(B,36,6)$}} \\
+        $\downarrow$ \\
+        \rowcolor{orange!15}
+        \fbox{\parbox{4.2cm}{\centering Split $\to$ 6 channels $(B,36)$ each}} \\
+        $\downarrow$ \\
+        \rowcolor{orange!25}
+        \fbox{\parbox{4.2cm}{\centering Chronos tokeniser (quantile bins)}} \\
+        $\downarrow$ \\
+        \rowcolor{blue!15}
+        \fbox{\parbox{4.2cm}{\centering T5 Encoder\\{\tiny frozen Ph.1 / partial Ph.2}}} \\
+        $\downarrow$ \\
+        \rowcolor{blue!8}
+        \fbox{\parbox{4.2cm}{\centering Masked mean-pool $\to$ 512-dim/ch}} \\
+        $\downarrow$ \\
+        \rowcolor{green!15}
+        \fbox{\parbox{4.2cm}{\centering Concat $6\times512=3072$-dim}} \\
+        $\downarrow$ \\
+        \rowcolor{green!25}
+        \fbox{\parbox{4.2cm}{\centering MLP head $\to$ 14 classes}} \\
+      \end{tabular}
       \end{center}
-      \vspace{0.3em}
+      \vspace{0.2em}
       \begin{block}{Why channel-independent?}
         \small Chronos is \emph{univariate} by design. Processing each passband
-        separately preserves the pre-trained tokeniser semantics and avoids
-        architectural modification of the T5 model.
+        separately preserves the pre-trained tokeniser semantics.
       \end{block}
     \end{column}
   \end{columns}

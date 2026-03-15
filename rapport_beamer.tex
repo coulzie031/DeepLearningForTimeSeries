@@ -462,9 +462,17 @@
         \item \textbf{Ensemble gain} uniform across all learnable classes
       \end{itemize}
       \vspace{0.3em}
-      \begin{block}{Macro vs Weighted F1}
-        \small Macro F1=0.42 penalises classes 53, 64 equally.\\
-        Weighted F1=0.61 (by support) reflects real-world relevance better.
+      \begin{block}{Macro F1 vs Weighted F1}
+        \small
+        \textbf{Macro F1 = 0.42} — unweighted average over all 14 classes.
+        Classes 53 (F1=0, 7 train samples) and 64 (F1=0.08, 24 samples)
+        each drag the average down equally, despite being statistically unlearnable.\\[0.4em]
+        \textbf{Weighted F1 = 0.61} — weighted by class support.
+        Reflects real-world performance: our model classifies the
+        \emph{learnable} classes (90\% of test samples) very well.\\[0.4em]
+        \textcolor{myred}{\textbf{Key point:}} removing classes 53 \& 64,
+        Macro F1 rises to \textbf{$\approx$0.49} — the gap is entirely
+        explained by data scarcity, not model failure.
       \end{block}
     \end{column}
   \end{columns}

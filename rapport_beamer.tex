@@ -486,26 +486,25 @@
 \end{frame}
 
 % ─────────────────────────────────────────────────────────────────────────────
-\begin{frame}{MOMENT Embeddings — t-SNE (test set)}
+\begin{frame}{Chronos Embeddings — t-SNE (test set)}
   \begin{columns}
     \begin{column}{0.55\textwidth}
       \centering
       \safefig{figures/fig_tsne.png}{width=\linewidth}{8cm}
     \end{column}
     \begin{column}{0.43\textwidth}
-      \textbf{t-SNE of MOMENT 6144-dim embeddings}
+      \textbf{t-SNE of Chronos 3072-dim embeddings}
       \begin{itemize}
-        \item Partial class structure visible despite MOMENT underperforming
-        \item Classes 65 (top-right), 16 tend to cluster
-        \item Class 90 (dominant, 44\%) overlaps many others — SN Ia hard to separate from SN subtypes
+        \item Partial class structure visible after Phase 2 fine-tuning
+        \item Classes 65, 16, 88 tend to cluster — well-classified
+        \item Class 90 (dominant, 44\%) overlaps SN subtypes — hard to separate
         \item Rare classes (53, 64) scattered — insufficient training signal
       \end{itemize}
       \vspace{0.3em}
       \begin{block}{Insight}
-        \small Even though MOMENT has low F1,
-        its embeddings contain class-relevant structure.
-        The 341M params were \emph{too many} to fine-tune
-        with only 1,967 training samples.
+        \small Chronos encoder, originally trained for \emph{forecasting},
+        learns class-discriminative temporal features after
+        only 40 epochs of partial fine-tuning (46M params).
       \end{block}
     \end{column}
   \end{columns}

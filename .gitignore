@@ -1,0 +1,23 @@
+# Claude Code settings (local only)
+.claude/
+
+# LaTeX temp files
+*.aux
+*.log
+*.nav
+*.out
+*.snm
+*.toc
+*.synctex.gz
+*.fls
+*.fdb_latexmk
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.ipynb_checkpoints/
+
+# Results (large files, generated)
+results/*.pt
+results/*.pkl

@@ -60,5 +60,5 @@ archive/               ← old training scripts
 
 - **Foundation model**: Chronos-T5-Small (46M) adapted from forecasting → classification by repurposing the T5 encoder
 - **Imbalance**: WeightedRandomSampler + Focal Loss (γ=2) — critical for class 53 (7 train samples)
-- **Ensemble**: soft-voting weighted by exp(10·F1_val), members excluded if F1 < 0.33
+- **Ensemble**: combination of 4 models that each capture different patterns in the data. Each model outputs a probability distribution over the 14 classes. We combine them via **weighted soft voting**: each model's weight is proportional to exp(10 × F1_val), so models that performed better on validation get more influence. Models with val F1 < 0.33 are excluded entirely. The final prediction is the class with the highest combined probability.
 - **TTA**: 5 augmented test passes for InceptionTime×5 and PatchTST

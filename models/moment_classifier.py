@@ -21,7 +21,6 @@ import torch.nn.functional as F
 
 MOMENT_PATCH_LEN  = 8      # MOMENT-1-large uses 8-length patches
 MOMENT_D_MODEL    = 1024   # MOMENT-1-large embedding dimension
-MOMENT_EMB_DIM    = 2 * MOMENT_D_MODEL   # mean + max concat → 2048
 LSST_SEQ_LEN      = 36
 # Pad LSST (T=36) to next multiple of MOMENT_PATCH_LEN = 40
 MOMENT_SEQ_LEN    = ((LSST_SEQ_LEN + MOMENT_PATCH_LEN - 1) // MOMENT_PATCH_LEN) * MOMENT_PATCH_LEN
@@ -57,21 +56,12 @@ class MOMENTClassifier(nn.Module):
         self.n_channels   = n_channels
         self.seq_len      = MOMENT_SEQ_LEN
         self.model_name   = model_name
+        self.dropout      = dropout
         self._loaded      = False
+        self.emb_dim      = None  # determined after load_moment()
 
-        # Classification head — takes mean+max concat embedding (2048)
-        self.head = nn.Sequential(
-            nn.LayerNorm(MOMENT_EMB_DIM),
-            nn.Dropout(dropout),
-            nn.Linear(MOMENT_EMB_DIM, 512),
-            nn.GELU(),
-            nn.Dropout(dropout),
-            nn.Linear(512, 128),
-            nn.GELU(),
-            nn.Dropout(dropout / 2),
-            nn.Linear(128, num_classes),
-        )
-        self._init_head()
+        # Placeholder head — rebuilt in load_moment() once emb_dim is known
+        self.head = nn.Identity()
 
     def _init_head(self):
         for m in self.head.modules():
@@ -119,9 +109,39 @@ class MOMENTClassifier(nn.Module):
         self.backbone = self.backbone.to(device)
         self._loaded = True
 
+        # ── Determine actual embedding dim with a dummy forward pass ─────────
+        # MOMENT outputs (B, n_channels, d_model) — one vector per channel.
+        # We FLATTEN channels to preserve cross-channel structure:
+        #   (B, n_channels, d_model) → (B, n_channels * d_model) = (B, 6144)
+        # Previous mean+max over channels destroyed which-channel-has-what-signal.
+        with torch.no_grad():
+            dummy_x = torch.zeros(1, self.n_channels, self.seq_len, device=device)
+            dummy_m = torch.ones(1, self.seq_len, device=device)
+            out = self.backbone(x_enc=dummy_x, input_mask=dummy_m)
+            emb = out.embeddings.float()
+            # emb: (1, n_channels, d_model) or (1, d_model)
+            self.emb_dim = int(emb[0].numel())  # flatten size
+
+        print(f"  Embedding shape from backbone: {tuple(emb.shape[1:])} → emb_dim={self.emb_dim}")
+
+        # Build head now that emb_dim is known
+        d = self.dropout
+        self.head = nn.Sequential(
+            nn.LayerNorm(self.emb_dim),
+            nn.Dropout(d),
+            nn.Linear(self.emb_dim, 512),
+            nn.GELU(),
+            nn.Dropout(d),
+            nn.Linear(512, 128),
+            nn.GELU(),
+            nn.Dropout(d / 2),
+            nn.Linear(128, self.num_classes),
+        ).to(device)
+        self._init_head()
+
         n_total = sum(p.numel() for p in self.backbone.parameters())
         print(f"  MOMENT loaded. seq_len={self.seq_len}, n_channels={self.n_channels},"
-              f" total params={n_total:,}")
+              f" total params={n_total:,}  head_input={self.emb_dim}")
         return self
 
     # ── Freeze / unfreeze helpers ─────────────────────────────────────────────
@@ -332,22 +352,16 @@ class MOMENTClassifier(nn.Module):
 
     def encode(self, x, mask=None):
         """
-        Return MOMENT embeddings (B, 2*d_model) — mean+max concat over patches/channels.
-        Richer than plain mean: preserves peak activations per patch position.
+        Return MOMENT embeddings (B, emb_dim) — flattened per-channel vectors.
+        MOMENT outputs (B, n_channels, d_model): one 1024-d vector per passband.
+        Flattening preserves cross-channel structure crucial for LSST classification.
         """
         x_enc, input_mask = self._prepare(x, mask)
         out = self.backbone(x_enc=x_enc, input_mask=input_mask)
         emb = out.embeddings.float()                    # ensure fp32
         emb = torch.nan_to_num(emb, nan=0.0, posinf=100.0, neginf=-100.0)
-        if emb.dim() == 3:
-            # emb: (B, P, d_model) where P = n_patches (or n_channels)
-            emb_mean = emb.mean(dim=1)                  # (B, d_model)
-            emb_max  = emb.max(dim=1).values            # (B, d_model)
-            emb = torch.cat([emb_mean, emb_max], dim=1) # (B, 2*d_model)
-        elif emb.dim() == 2:
-            # already (B, d_model) — pad with zeros to keep dim consistent
-            emb = torch.cat([emb, emb], dim=1)          # (B, 2*d_model)
-        return emb                                      # (B, MOMENT_EMB_DIM=2048)
+        # Flatten all dims after batch: (B, n_channels, d_model) → (B, n_channels*d_model)
+        return emb.reshape(emb.size(0), -1)             # (B, emb_dim)
 
     def forward(self, x, mask=None):
         """

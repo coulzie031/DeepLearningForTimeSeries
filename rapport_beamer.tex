@@ -2,11 +2,11 @@
 % rapport_beamer.tex  —  LSST Time Series Classification
 % Compile: pdflatex rapport_beamer.tex  (twice)
 % Figures needed (save from Colab):
-%   fig_comparison.png   — bar chart Model Comparison
-%   fig_perclass.png     — Per-class F1 Baseline vs Ensemble
-%   fig_tsne.png         — t-SNE of MOMENT embeddings
-%   fig_curves.png       — InceptionTime training curves
-%   fig_confusion.png    — Confusion matrices
+%   figures/fig_comparison.png   — bar chart Model Comparison
+%   figures/fig_perclass.png     — Per-class F1 Baseline vs Ensemble
+%   figures/fig_tsne.png         — t-SNE of MOMENT embeddings
+%   figures/fig_curves.png       — InceptionTime training curves
+%   figures/fig_confusion.png    — Confusion matrices
 % ─────────────────────────────────────────────────────────────────────────────
 \documentclass[aspectratio=169, 10pt]{beamer}
 
@@ -182,7 +182,7 @@
     \end{column}
     \begin{column}{0.48\textwidth}
       \centering
-      \safefig{fig_curves.png}{width=\linewidth}{7cm}
+      \safefig{figures/fig_curves.png}{width=\linewidth}{7cm}
       \vspace{0.2em}
       {\footnotesize \textit{Training curves — visible overfitting on accuracy;\\
       early stopping on macro F1 prevents it.}}
@@ -435,7 +435,7 @@
     \end{column}
     \begin{column}{0.48\textwidth}
       \centering
-      \safefig{fig_comparison.png}{width=\linewidth}{7.5cm}
+      \safefig{figures/fig_comparison.png}{width=\linewidth}{7.5cm}
     \end{column}
   \end{columns}
   \vspace{0.2em}
@@ -448,7 +448,7 @@
   \begin{columns}
     \begin{column}{0.55\textwidth}
       \centering
-      \safefig{fig_perclass.png}{width=\linewidth}{8cm}
+      \safefig{figures/fig_perclass.png}{width=\linewidth}{8cm}
     \end{column}
     \begin{column}{0.43\textwidth}
       \textbf{Observations:}
@@ -471,7 +471,7 @@
 % ─────────────────────────────────────────────────────────────────────────────
 \begin{frame}{Confusion Matrices — Baseline vs Ensemble}
   \centering
-  \safefig{fig_confusion.png}{width=0.92\linewidth}{13cm}
+  \safefig{figures/fig_confusion.png}{width=0.92\linewidth}{13cm}
   \vspace{0.3em}
   \begin{columns}
     \begin{column}{0.48\textwidth}
@@ -490,7 +490,7 @@
   \begin{columns}
     \begin{column}{0.55\textwidth}
       \centering
-      \safefig{fig_tsne.png}{width=\linewidth}{8cm}
+      \safefig{figures/fig_tsne.png}{width=\linewidth}{8cm}
     \end{column}
     \begin{column}{0.43\textwidth}
       \textbf{t-SNE of MOMENT 6144-dim embeddings}

@@ -33,9 +33,10 @@ Both notebooks run on **Google Colab (T4 GPU)** and clone this repo automaticall
 | **Chronos-T5-Small** (Setting 1, Phase 1+2) | 0.5333 | **0.4333** |
 | Baseline — InceptionTime (scratch) | 0.5483 | 0.3753 |
 | MultiROCKET | 0.6079 | 0.3625 |
-| MUSE SOTA (Ruiz et al. 2021) | 0.636 | — |
 | InceptionTime-Large × 5 + TTA | 0.6427 | 0.4150 |
 | ★ **Ensemble (ours)** | **0.6448** | **0.4200** |
+| MUSE SOTA (Ruiz et al. 2021) | 0.636 | — |
+| ROCKET (Ruiz et al. 2021) | 0.632 | — |
 
 ---
 
@@ -44,7 +45,7 @@ Both notebooks run on **Google Colab (T4 GPU)** and clone this repo automaticall
 ```
 Chronos.ipynb          ← main notebook (Chronos foundation model)
 Moment.ipynb           ← MOMENT foundation model comparison
-rapport_beamer.tex     ← LaTeX beamer presentation (13 slides)
+rapport_beamer.tex     ← LaTeX beamer presentation (20 slides)
 rapport_beamer.pdf     ← compiled PDF report
 figures/               ← figures used in the report
 models/                ← ChronosClassifier, MOMENTClassifier, InceptionTime, PatchTST

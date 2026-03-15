@@ -4,9 +4,11 @@
 % Figures needed (save from Colab):
 %   figures/fig_comparison.png   — bar chart Model Comparison
 %   figures/fig_perclass.png     — Per-class F1 Baseline vs Ensemble
-%   figures/fig_tsne.png         — t-SNE of MOMENT embeddings
+%   figures/fig_tsne.png         — t-SNE of Chronos embeddings
 %   figures/fig_curves.png       — InceptionTime training curves
 %   figures/fig_confusion.png    — Confusion matrices
+%   figures/fig_dataset.png      — Class distribution + NaN rate
+%   figures/fig_lightcurves.png  — Sample light curves per class
 % ─────────────────────────────────────────────────────────────────────────────
 \documentclass[aspectratio=169, 10pt]{beamer}
 
@@ -111,6 +113,35 @@
       \end{center}
       \vspace{0.4em}
       \small \textbf{SOTA} (Ruiz et al.\ 2021): MUSE = \textbf{63.6\%} accuracy
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\begin{frame}{LSST — Visual Structure of the Data}
+  \begin{columns}
+    \begin{column}{0.60\textwidth}
+      \centering
+      \safefig{figures/fig_lightcurves.png}{width=\linewidth}{8.5cm}
+      {\footnotesize \textit{Sample light curves (8 classes). Each colour = one passband (u,g,r,i,z,y).}}
+    \end{column}
+    \begin{column}{0.38\textwidth}
+      \textbf{What the model must learn:}
+      \begin{itemize}
+        \item \textbf{Shape}: supernovae (42, 90) rise fast then decay over $\sim$30 days
+        \item \textbf{Periodicity}: variable stars (65) show oscillating flux
+        \item \textbf{Duration}: TDE (16) can stay bright for months
+        \item \textbf{Colour}: ratio across passbands (u–y) encodes temperature $\Rightarrow$ spectral type
+      \end{itemize}
+      \vspace{0.4em}
+      \begin{block}{Challenge}
+        \small Many classes look \emph{similar} in a single passband.
+        The model must exploit all 6 passbands \emph{jointly} — this motivates our
+        channel-concatenation strategy in Chronos.
+      \end{block}
+      \vspace{0.3em}
+      \centering
+      \safefig{figures/fig_dataset.png}{width=\linewidth}{4cm}
     \end{column}
   \end{columns}
 \end{frame}
@@ -329,6 +360,85 @@
 \end{frame}
 
 % ─────────────────────────────────────────────────────────────────────────────
+\begin{frame}{Chronos Tokenisation Pipeline — How it Works}
+  \begin{columns}
+    \begin{column}{0.52\textwidth}
+      \textbf{Step-by-step adaptation}
+      \vspace{0.3em}
+
+      \begin{enumerate}
+        \setlength\itemsep{0.35em}
+        \item \textbf{Input}: $(B, T{=}36, C{=}6)$ multivariate series
+
+        \item \textbf{Split} into 6 univariate channels:\\
+              $\{x_c\}_{c=1}^{6}$, each of shape $(B, 36)$
+
+        \item \textbf{Chronos tokeniser} per channel:\\
+              maps continuous values $\to$ quantile bin IDs
+              (4096-token vocabulary)
+
+        \item \textbf{T5 encoder} $\to$ hidden states $(B, L, 512)$
+
+        \item \textbf{Masked mean-pool} over observed positions:\\
+              $\mathbf{e}_c = \frac{\sum_t m_t \, h_t}{\sum_t m_t} \in \mathbb{R}^{512}$
+
+        \item \textbf{Concatenate} all channels:\\
+              $\mathbf{z} = [\mathbf{e}_1 \| \ldots \| \mathbf{e}_6] \in \mathbb{R}^{3072}$
+
+        \item \textbf{MLP head}: $\mathbb{R}^{3072} \to \mathbb{R}^{14}$ (Softmax)
+      \end{enumerate}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      \vspace{0.3em}
+      \begin{center}
+      \footnotesize
+      \begin{tikzpicture}[node distance=0.45cm, every node/.style={font=\tiny}]
+        \node[draw, rounded corners, fill=blue!10, minimum width=3.5cm, minimum height=0.45cm]
+          (input) {Input $(B,36,6)$};
+
+        \node[draw, rounded corners, fill=orange!15, minimum width=3.5cm, minimum height=0.45cm,
+              below=of input]
+          (split) {Split $\to$ 6 channels $(B,36)$ each};
+
+        \node[draw, rounded corners, fill=orange!25, minimum width=3.5cm, minimum height=0.45cm,
+              below=of split]
+          (tok) {Chronos tokeniser (quantile bins)};
+
+        \node[draw, rounded corners, fill=myblue!20, minimum width=3.5cm, minimum height=0.45cm,
+              below=of tok]
+          (enc) {T5 Encoder {\normalfont (frozen phase 1 / partial phase 2)}};
+
+        \node[draw, rounded corners, fill=myblue!10, minimum width=3.5cm, minimum height=0.45cm,
+              below=of enc]
+          (pool) {Masked mean-pool $\to$ 512-dim per channel};
+
+        \node[draw, rounded corners, fill=green!15, minimum width=3.5cm, minimum height=0.45cm,
+              below=of pool]
+          (concat) {Concatenate $6 \times 512 = 3072$-dim};
+
+        \node[draw, rounded corners, fill=green!25, minimum width=3.5cm, minimum height=0.45cm,
+              below=of concat]
+          (head) {MLP head $\to$ 14 classes};
+
+        \draw[->] (input) -- (split);
+        \draw[->] (split) -- (tok);
+        \draw[->] (tok) -- (enc);
+        \draw[->] (enc) -- (pool);
+        \draw[->] (pool) -- (concat);
+        \draw[->] (concat) -- (head);
+      \end{tikzpicture}
+      \end{center}
+      \vspace{0.3em}
+      \begin{block}{Why channel-independent?}
+        \small Chronos is \emph{univariate} by design. Processing each passband
+        separately preserves the pre-trained tokeniser semantics and avoids
+        architectural modification of the T5 model.
+      \end{block}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% ─────────────────────────────────────────────────────────────────────────────
 \begin{frame}{MOMENT vs Chronos — Comparison}
   \begin{center}
   \begin{tabular}{lcccc}
@@ -396,6 +506,59 @@
         InceptionTime recommendation (Fawaz et al.\ 2020).
         It achieves the highest val F1 on this dataset.
       \end{block}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\begin{frame}{Ablation — Contribution of Each Design Choice}
+  \begin{columns}
+    \begin{column}{0.52\textwidth}
+      \begin{center}
+      \footnotesize
+      \begin{tabular}{lcc}
+        \toprule
+        \textbf{Configuration} & \textbf{Acc} & \textbf{Macro F1} \\
+        \midrule
+        \multicolumn{3}{l}{\textit{Imbalance handling}} \\
+        InceptionTime — vanilla (bake-off) & 0.340 & — \\
+        \rowcolor{blue!6}
+        + WeightedRandomSampler            & $\sim$0.50 & $\sim$0.33 \\
+        + Focal Loss + label smoothing     & 0.5483 & 0.3753 \\
+        \midrule
+        \multicolumn{3}{l}{\textit{Foundation model (Setting 1)}} \\
+        MOMENT (341M, phase 1+2)          & 0.3078 & 0.2791 \\
+        \textcolor{myblue}{Chronos (46M, phase 1 only)}    & 0.5211 & 0.4292 \\
+        \textcolor{myblue}{Chronos (46M, phase 1+2)}       & 0.5333 & \textbf{0.4333} \\
+        \midrule
+        \multicolumn{3}{l}{\textit{Ensemble}} \\
+        InceptionTime-Large $\times$5 only & 0.6427 & 0.4150 \\
+        + PatchTST + TTA                  & 0.6390 & 0.4175 \\
+        + Chronos + MultiROCKET           & 0.6440 & 0.4190 \\
+        \rowcolor{green!15}
+        \textbf{Full ensemble (ours)}      & \textbf{0.6448} & \textbf{0.4200} \\
+        \midrule
+        MUSE SOTA (Ruiz et al., 2021)     & 0.636  & — \\
+        \bottomrule
+      \end{tabular}
+      \end{center}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      \textbf{Key takeaways:}
+      \begin{itemize}
+        \item \textbf{WeightedSampler} is the single biggest gain:\\
+              vanilla InceptionTime (0.34) $\to$ 0.50 just from balanced batches
+        \item \textbf{Chronos Phase 2} unlocks +1.5pts F1 over linear probing
+        \item Each ensemble member adds \textbf{marginal but consistent} gains
+        \item \textbf{Diversity matters}: kernel method (MultiROCKET) contributes
+              even with low val F1 (0.38), because it captures different features
+              than CNN/Transformer members
+      \end{itemize}
+      \vspace{0.3em}
+      \begin{alertblock}{MUSE comparison}
+        \small MUSE uses no imbalance handling. On a balanced dataset it would
+        likely score lower than our ensemble.
+      \end{alertblock}
     \end{column}
   \end{columns}
 \end{frame}

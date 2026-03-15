@@ -45,7 +45,7 @@ Both notebooks run on **Google Colab (T4 GPU)** and clone this repo automaticall
 ```
 Chronos.ipynb          ← main notebook (Chronos foundation model)
 Moment.ipynb           ← MOMENT foundation model comparison
-rapport_beamer.tex     ← LaTeX beamer presentation (20 slides)
+rapport_beamer.tex     ← LaTeX beamer presentation (17 slides)
 rapport_beamer.pdf     ← compiled PDF report
 figures/               ← figures used in the report
 models/                ← ChronosClassifier, MOMENTClassifier, InceptionTime, PatchTST

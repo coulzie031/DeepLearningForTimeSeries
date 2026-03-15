@@ -9,7 +9,7 @@
 
 This project tackles **14-class astronomical object classification** on the LSST/PLAsTiCC dataset (`N × T=36 × C=6`), adapting a pre-trained time-series foundation model (Setting 1).
 
-**Best result: Ensemble Acc = 0.6480 — beats MUSE SOTA (0.636) by +1.19%**
+**Best result: Ensemble Acc = 0.6448 — beats MUSE SOTA (0.636) by +0.86%**
 
 ---
 
@@ -18,7 +18,6 @@ This project tackles **14-class astronomical object classification** on the LSST
 | Notebook | Description |
 |----------|-------------|
 | [`Chronos.ipynb`](Chronos.ipynb) | **Main notebook** — Chronos-T5-Small as foundation model (Setting 1) + ensemble |
-| [`Boost.ipynb`](Boost.ipynb) | **Best result** — 1000 epochs + synthetic oversampling + Chronos ensemble |
 | [`Moment.ipynb`](Moment.ipynb) | Alternative — MOMENT-1-large as foundation model (Setting 1) + ensemble |
 
 Both notebooks run on **Google Colab (T4 GPU)** and clone this repo automatically.
@@ -31,12 +30,11 @@ Both notebooks run on **Google Colab (T4 GPU)** and clone this repo automaticall
 |--------|----------|----------|
 | MOMENT-1-large (Setting 1) | 0.3078 | 0.2791 |
 | PatchTST + TTA | 0.4903 | 0.4194 |
-| **Chronos-T5-Small** (Setting 1) | 0.5645 | 0.4459 |
+| **Chronos-T5-Small** (Setting 1, Phase 1+2) | 0.5333 | **0.4333** |
 | Baseline — InceptionTime (scratch) | 0.5483 | 0.3753 |
 | MultiROCKET | 0.6079 | 0.3625 |
-| InceptionTime-Large × 5 + TTA | 0.6383 | 0.4149 |
-| Ensemble (Chronos.ipynb) | 0.6448 | 0.4200 |
-| ★ **Ensemble Boost (ours)** | **0.6480** | **0.4217** |
+| InceptionTime-Large × 5 + TTA | 0.6427 | 0.4150 |
+| ★ **Ensemble (ours)** | **0.6448** | **0.4200** |
 | MUSE SOTA (Ruiz et al. 2021) | 0.636 | — |
 | ROCKET (Ruiz et al. 2021) | 0.632 | — |
 

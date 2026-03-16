@@ -44,8 +44,7 @@ Both notebooks run on **Google Colab (T4 GPU)** and clone this repo automaticall
 
 ## Complementary Work — Data Augmentation
 
-We also explored a complementary approach using data augmentation (jitter, scaling, time shift):
-**Repo:** [github.com/mhani6/deep_learning_time_series](https://github.com/mhani6/deep_learning_time_series)
+We also implemented a complementary approach using data augmentation (jitter, scaling, time shift) — see the [`augmentation` branch](https://github.com/coulzie031/DeepLearningForTimeSeries/tree/augmentation), based on [github.com/mhani6/deep_learning_time_series](https://github.com/mhani6/deep_learning_time_series).
 
 | Method | Accuracy | Macro F1 |
 |--------|----------|----------|

@@ -244,7 +244,7 @@
         \item MLP classification head on top
       \end{itemize}
       \vspace{0.4em}
-      \textbf{Phase 1 — Linear Probing (150 ep)}
+      \textbf{Phase 1 — Linear Probing (200 ep, stop ep62)}
       \begin{itemize}
         \item Backbone frozen, only head trains ($\sim$594k params)
         \item Best val F1 = 0.3030 at ep62
@@ -284,31 +284,32 @@
 \begin{frame}{Approach 2 — Chronos-T5-Small (46M params)}
   \begin{columns}
     \begin{column}{0.55\textwidth}
-      \textbf{Chronos: originally a forecasting model}
-      \begin{itemize}
+      \small\textbf{Chronos: originally a forecasting model}
+      \begin{itemize}\setlength\itemsep{1pt}
         \item Pre-trained to predict future values via tokenised quantiles
         \item We repurpose only the \textbf{T5 encoder} (discard decoder)
         \item Analogous to using BERT for sentence classification
       \end{itemize}
-      \vspace{0.4em}
-      \textbf{Adaptation to LSST}
-      \begin{itemize}
+      \vspace{0.2em}
+      \small\textbf{Adaptation to LSST}
+      \begin{itemize}\setlength\itemsep{1pt}
         \item Each passband processed \textbf{independently} through Chronos tokeniser
-        \item Masked mean-pooling over encoder hidden states $\to$ 512-dim per channel
+        \item Masked mean-pooling $\to$ 512-dim per channel
         \item Concatenate 6 channels: $6 \times 512 = \mathbf{3072}$-dim
         \item 3-layer MLP classification head
       \end{itemize}
-      \vspace{0.4em}
-      \textbf{Phase 1 — Linear Probing (50 ep):} val F1=0.4292\\
-      \textbf{Phase 2 — Unfreeze last 4 blocks (40 ep):} val F1=\textbf{0.4333}
+      \vspace{0.2em}
+      \small\textbf{Phase 1} — Linear Probing (200 ep, stop ep86): val F1=0.4333\\
+      \small\textbf{Phase 2} — Unfreeze last 4 blocks (100 ep, stop ep32): val F1=\textbf{0.4333}
     \end{column}
     \begin{column}{0.42\textwidth}
       \begin{block}{Chronos results (test set)}
         \begin{center}
+        \small
         \begin{tabular}{ll}
           \toprule
-          Phase 1 accuracy & 0.5211 \\
-          Phase 1 Macro F1 & 0.4292 \\
+          Phase 1 accuracy & 0.5333 \\
+          Phase 1 Macro F1 & 0.4333 \\
           \midrule
           \textbf{Phase 2 accuracy} & \textbf{0.5333} \\
           \textbf{Phase 2 Macro F1} & \textbf{0.4333} \\
@@ -316,13 +317,12 @@
         \end{tabular}
         \end{center}
       \end{block}
-      \vspace{0.4em}
-      \textbf{Why does Chronos succeed?}
-      \begin{itemize}
+      \vspace{0.2em}
+      \small\textbf{Why does Chronos succeed?}
+      \begin{itemize}\setlength\itemsep{1pt}
         \item \textbf{46M} params: well-sized for 1,967 train samples
-        \item Chronos tokeniser handles NaN naturally
         \item Forecasting pre-training captures temporal dynamics
-        \item F1=\textbf{0.433} $>$ InceptionTime baseline (0.375)
+        \item F1=\textbf{0.433} $>$ baseline (0.375) $>$ MOMENT (0.279)
       \end{itemize}
       \vspace{0.2em}
       \small \textcolor{mygreen}{\textbf{$\checkmark$ Included in ensemble}}
@@ -448,31 +448,29 @@
 % ─────────────────────────────────────────────────────────────────────────────
 \begin{frame}{Per-class Analysis — Baseline vs Ensemble}
   \begin{columns}
-    \begin{column}{0.55\textwidth}
+    \begin{column}{0.54\textwidth}
       \centering
       \safefig{figures/fig_perclass.png}{width=\linewidth}{8cm}
     \end{column}
-    \begin{column}{0.43\textwidth}
-      \textbf{Observations:}
-      \begin{itemize}
-        \item \textcolor{mygreen}{\textbf{Classes 16, 65, 88}}: F1 $>$ 0.8 — well-separated in feature space
-        \item \textbf{Class 90} (44\% of data): F1$\approx$0.60 — dominant but confused with SN subtypes
-        \item \textcolor{myred}{\textbf{Class 53}} (7 train): F1=0 — cannot learn from 7 samples
-        \item \textcolor{myred}{\textbf{Class 64}} (24 train): F1=0 — same few-shot issue
-        \item \textbf{Ensemble gain} uniform across all learnable classes
+    \begin{column}{0.44\textwidth}
+      \small\textbf{Observations:}
+      \begin{itemize}\setlength\itemsep{0pt}
+        \item \textcolor{mygreen}{\textbf{Classes 16, 65, 88}}: F1 $>$ 0.8 — well-separated
+        \item \textbf{Class 90} (44\%): F1$\approx$0.60 — confused with SN subtypes
+        \item \textcolor{myred}{\textbf{Classes 53/64}} (7 \& 24 train): F1$\approx$0 — data scarcity
+        \item \textbf{Ensemble} improves all learnable classes uniformly
       \end{itemize}
-      \vspace{0.3em}
+      \vspace{0.2em}
       \begin{block}{Macro F1 vs Weighted F1}
-        \small
-        \textbf{Macro F1 = 0.42} — unweighted average over all 14 classes.
-        Classes 53 (F1=0, 7 train samples) and 64 (F1=0.08, 24 samples)
-        each drag the average down equally, despite being statistically unlearnable.\\[0.4em]
-        \textbf{Weighted F1 = 0.61} — weighted by class support.
-        Reflects real-world performance: our model classifies the
-        \emph{learnable} classes (90\% of test samples) very well.\\[0.4em]
-        \textcolor{myred}{\textbf{Key point:}} removing classes 53 \& 64,
-        Macro F1 rises to \textbf{$\approx$0.49} — the gap is entirely
-        explained by data scarcity, not model failure.
+        \scriptsize
+        \textbf{Macro F1 = 0.42}: unweighted over 14 classes.
+        Classes 53 \& 64 (F1$\approx$0) each count equally
+        despite having only 7--24 train samples.\\[0.2em]
+        \textbf{Weighted F1 = 0.61}: weighted by support —
+        reflects real performance on the 90\% of learnable samples.\\[0.2em]
+        \textcolor{myred}{\textbf{Without classes 53 \& 64:}}
+        Macro F1 $\approx$ \textbf{0.49}.
+        The gap is entirely explained by data scarcity.
       \end{block}
     \end{column}
   \end{columns}
@@ -514,7 +512,7 @@
       \begin{block}{Insight}
         \small Chronos encoder, originally trained for \emph{forecasting},
         learns class-discriminative temporal features after
-        only 40 epochs of partial fine-tuning (46M params).
+        only 100 epochs of partial fine-tuning (46M params).
       \end{block}
     \end{column}
   \end{columns}
@@ -602,10 +600,10 @@
     Model & Epochs & LR & Optimizer & Trainable params \\
     \midrule
     InceptionTime (baseline)    & 200 & $10^{-3}$        & AdamW + CosineAnn. & 474k \\
-    MOMENT Phase 1              & 150 & $10^{-3}$        & AdamW + CosineAnn. & 594k (head) \\
-    MOMENT Phase 2              & 26  & $5\times10^{-6}$ (enc) & AdamW + warmup & 52M \\
-    Chronos Phase 1             & 50  & $10^{-3}$        & AdamW + CosineAnn. & $\sim$5k (head) \\
-    Chronos Phase 2             & 40  & $5\times10^{-5}$ (head) / $5\times10^{-6}$ (enc) & AdamW + warmup & $\sim$8M \\
+    MOMENT Phase 1              & 200 (stop ep62) & $10^{-3}$        & AdamW + CosineAnn. & 594k (head) \\
+    MOMENT Phase 2              & 100 (stop ep26) & $5\times10^{-6}$ (enc) & AdamW + warmup & 52M \\
+    Chronos Phase 1             & 200 (stop ep86) & $10^{-3}$        & AdamW + CosineAnn. & $\sim$5k (head) \\
+    Chronos Phase 2             & 100 (stop ep32) & $5\times10^{-5}$ (head) / $5\times10^{-6}$ (enc) & AdamW + warmup & $\sim$8M \\
     PatchTST ($d=64$, 3L)       & 150 & $5\times10^{-4}$ & AdamW + CosineAnn. & 253k \\
     InceptionTime-Large$\times$5 & 200 & $10^{-3}$       & AdamW + CosineAnn. & 1.8M $\times$ 5 \\
     MultiROCKET                 & —   & RidgeCV          & —                  & 79,968 features \\

@@ -43,8 +43,8 @@ MOMENT-1-large \citep{moment} and Chronos-T5-Small \citep{chronos}. We further
 compare with UniTS \citep{units}, a non-pretrained dual-attention architecture
 trained with data augmentation. Our best ensemble — combining Chronos,
 InceptionTime$\times$5, PatchTST, and MultiROCKET via F1-weighted soft voting —
-achieves \textbf{64.48\% accuracy} and \textbf{Weighted F1 = 0.61}, surpassing
-the published MUSE SOTA of 63.6\% \citep{bakeoff}.
+achieves \textbf{64.48\% accuracy} and \textbf{Weighted F1 = 0.61}, comparing
+favourably to the best published result on this benchmark (MUSE, 63.6\%, \citealt{bakeoff}).
 Code: \url{https://github.com/coulzie031/DeepLearningForTimeSeries}
 \end{abstract}
 
@@ -194,8 +194,9 @@ performance on the learnable 90\% of test samples.
 
 \begin{table}[t]
 \caption{Test set results on LSST (14-class). Acc = accuracy, Mac.F1 = macro
-  F1, W.F1 = weighted F1. SOTA results from \citet{bakeoff} report accuracy
-  only.}
+  F1, W.F1 = weighted F1. $^\dagger$External implementation
+  (\url{github.com/mhani6/deep\_learning\_time\_series}).
+  SOTA from \citet{bakeoff} reports accuracy only.}
 \label{tab:results}
 \vskip 0.1in
 \begin{center}
@@ -205,25 +206,25 @@ performance on the learnable 90\% of test samples.
 \textbf{Method} & \textbf{Acc} & \textbf{Mac.F1} & \textbf{W.F1} \\
 \midrule
 \multicolumn{4}{l}{\textit{Baselines (no pre-training)}} \\
-InceptionTime            & 0.5483 & 0.3753 & — \\
-InceptionTime + aug.     & 0.5783 & 0.4324 & — \\
+InceptionTime                      & 0.5483 & 0.3753 & — \\
+InceptionTime + aug.$^\dagger$     & 0.5783 & 0.4324 & — \\
 \midrule
 \multicolumn{4}{l}{\textit{Foundation models (Setting 1)}} \\
-MOMENT-1-large           & 0.3078 & 0.2791 & — \\
-Chronos-T5-Small         & 0.5333 & 0.4333 & — \\
+MOMENT-1-large                     & 0.3078 & 0.2791 & — \\
+Chronos-T5-Small                   & 0.5333 & 0.4333 & — \\
 \midrule
 \multicolumn{4}{l}{\textit{Competitor models}} \\
-PatchTST + aug. + TTA    & 0.5985 & 0.4599 & — \\
-MultiROCKET              & 0.6079 & 0.3625 & — \\
-UniTS + aug.             & 0.6606 & \textbf{0.5314} & — \\
-InceptionTime-L$\times$5 + TTA & 0.6427 & 0.4150 & — \\
+PatchTST + aug.$^\dagger$ + TTA    & 0.5985 & 0.4599 & — \\
+MultiROCKET                        & 0.6079 & 0.3625 & — \\
+UniTS + aug.$^\dagger$             & 0.6606 & \textbf{0.5314} & — \\
+InceptionTime-L$\times$5 + TTA    & 0.6427 & 0.4150 & — \\
 \midrule
-\textbf{Ensemble (ours)} & \textbf{0.6448} & 0.4200 & \textbf{0.61} \\
+\textbf{Ensemble (ours)}           & \textbf{0.6448} & 0.4200 & \textbf{0.61} \\
 \midrule
 \multicolumn{4}{l}{\textit{Published SOTA \citep{bakeoff}}} \\
-MUSE                     & 0.636  & —      & — \\
-ROCKET                   & 0.632  & —      & — \\
-MrSEQL                   & 0.603  & —      & — \\
+MUSE                               & 0.636  & —      & — \\
+ROCKET                             & 0.632  & —      & — \\
+MrSEQL                             & 0.603  & —      & — \\
 \bottomrule
 \end{tabular}
 \end{small}
@@ -238,14 +239,13 @@ Chronos (46M) significantly outperforms MOMENT (341M): +22.5 pts accuracy,
 Chronos' compact encoder fine-tunes effectively. Chronos also surpasses the
 baseline (macro F1 0.433 vs.\ 0.375), validating Setting~1.
 
-\paragraph{UniTS vs ensemble.}
-UniTS achieves the highest single-model scores (acc = 0.6606, F1 = 0.5314),
-notably outperforming our ensemble on macro F1. This gap stems from UniTS'
-dual-attention mechanism explicitly modeling inter-channel dependencies, combined
-with targeted augmentation. However, the bake-off SOTA \citep{bakeoff} reports
-only accuracy, making F1 comparisons with external baselines impossible. Our
-ensemble beats MUSE on accuracy (+0.88\%) while UniTS further surpasses it
-(+2.46\%).
+\paragraph{Competitor comparison.}
+UniTS$^\dagger$ achieves the highest single-model scores among all tested methods
+(acc = 0.6606, F1 = 0.5314), driven by its dual sequence--variable attention
+and low-rank temporal mixing. Our ensemble reaches acc = 0.6448, above the
+best published result on this benchmark (MUSE, 63.6\%, \citealt{bakeoff}),
+though a direct controlled comparison is limited since \citet{bakeoff} reports
+accuracy only and does not address class imbalance.
 
 \paragraph{Class imbalance.}
 Both approaches substantially benefit from imbalance handling. Standard
@@ -264,9 +264,9 @@ effectively to multivariate classification, outperforming MOMENT by a large
 margin — confirming that model scale relative to training set size matters more
 than pre-training task alignment;
 (2)~UniTS with data augmentation achieves the best single-model macro F1
-(0.5314), driven by its dual sequence--variable attention and low-rank temporal
-mixing;
-(3)~F1-weighted soft voting over diverse models surpasses MUSE SOTA on accuracy;
+(0.5314), showing the complementary value of dual-attention architectures;
+(3)~our ensemble (64.48\%) compares favourably to the best published result
+on this benchmark \citep{bakeoff}, without any additional data;
 (4)~imbalance handling (WeightedSampler + Focal Loss) is the single most
 impactful preprocessing decision on this dataset.
 

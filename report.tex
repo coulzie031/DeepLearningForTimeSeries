@@ -1,0 +1,270 @@
+% Compile from the Time series/ folder:
+%   pdflatex -shell-escape report.tex
+%   bibtex report
+%   pdflatex -shell-escape report.tex
+%   pdflatex -shell-escape report.tex
+
+\documentclass{article}
+\usepackage{microtype}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{amsmath,amssymb}
+\usepackage{xcolor}
+\usepackage[accepted]{ICML26/icml2026}
+
+\icmltitlerunning{Foundation Model Adaptation for LSST Time Series Classification}
+
+\begin{document}
+
+\twocolumn[
+  \icmltitle{Adapting Foundation Models for Astronomical Time Series Classification:\\
+             Setting 1 on the LSST/PLAsTiCC Benchmark}
+
+  \begin{icmlauthorlist}
+    \icmlauthor{Zi\'e Coulibaly}{u1}
+    \icmlauthor{Clijo Jose}{u1}
+    \icmlauthor{Oumouhani El~Vilaly}{u1}
+  \end{icmlauthorlist}
+
+  \icmlaffiliation{u1}{Deep Learning for Time Series, 2026}
+
+  \vskip 0.3in
+]
+
+\printAffiliationsAndNotice{}
+
+\begin{abstract}
+We address 14-class astronomical object classification on the LSST/PLAsTiCC
+benchmark~\citep{plasticc} — a multivariate time series dataset of shape
+$(N,\,T{=}36,\,C{=}6)$ with severe class imbalance (155:1 ratio) and sparse
+observations. Following Setting~1, we adapt two pre-trained foundation models:
+MOMENT-1-large \citep{moment} and Chronos-T5-Small \citep{chronos}. We further
+compare with UniTS \citep{units}, a non-pretrained dual-attention architecture
+trained with data augmentation. Our best ensemble — combining Chronos,
+InceptionTime$\times$5, PatchTST, and MultiROCKET via F1-weighted soft voting —
+achieves \textbf{64.48\% accuracy} and \textbf{Weighted F1 = 0.61}, comparing
+favourably to the best published result on this benchmark (MUSE, 63.6\%, \citealt{bakeoff}).
+Code: \url{https://github.com/coulzie031/DeepLearningForTimeSeries}
+\end{abstract}
+
+% ─────────────────────────────────────────────────
+\section{Introduction}
+% ─────────────────────────────────────────────────
+
+The LSST (Large Synoptic Survey Telescope) dataset, derived from the PLAsTiCC
+challenge, is one of the most challenging multivariate time series classification
+(TSC) benchmarks. Each light curve records the brightness of an astronomical
+object across 36 epochs and 6 photometric filters (passbands $u,g,r,i,z,y$),
+yielding a tensor of shape $(N,36,6)$. Two factors make this dataset
+particularly hard: (i) \emph{sparse observations} leading to NaN values, and
+(ii) \emph{extreme class imbalance} — class 53 (kilonovae) has only 7 training
+samples out of 2,459 total.
+
+Foundation models pre-trained on large time-series corpora offer a natural
+approach to scarce-data regimes. We explore two such models under
+\emph{Setting~1}: adapt a pre-trained foundation model to the classification
+task. We further investigate UniTS \citep{units}, a from-scratch dual-attention
+architecture combined with targeted data augmentation, as a strong competitor.
+Finally, we combine complementary models through an ensemble to push accuracy
+beyond the published SOTA.
+
+% ─────────────────────────────────────────────────
+\section{Dataset and Preprocessing}
+% ─────────────────────────────────────────────────
+
+\paragraph{LSST/PLAsTiCC.}
+The dataset contains 2,459 training samples, 2,466 test samples, and 14 classes
+(supernovae subtypes, variable stars, AGN, kilonovae, microlensing events).
+Labels are heavily imbalanced: the dominant class (SN~Ia, class~90) represents
+44\% of training data while class~53 has 7 samples.
+
+\paragraph{Preprocessing.}
+Missing values are filled via forward-fill, backward-fill, then zero-fill. A
+binary mask $(B,T,C)$ encodes observation positions. All channels are
+z-normalized using training statistics. To address imbalance, we use a
+\texttt{WeightedRandomSampler} with inverse-frequency weights and
+Focal Loss ($\gamma=2$) \citep{focal}, which downweights easy majority examples.
+
+\paragraph{Data augmentation} (applied only during training):
+\emph{Jitter} adds Gaussian noise ($\sigma{=}0.05$) with 50\% probability;
+\emph{scaling} multiplies each channel by a random factor in $[0.9, 1.1]$;
+\emph{time shift} applies a circular roll of $\pm 3$ steps with 30\%
+probability; \emph{MixUp} ($\alpha{=}0.3$) interpolates pairs of samples and
+their labels.
+
+% ─────────────────────────────────────────────────
+\section{Methods}
+% ─────────────────────────────────────────────────
+
+\subsection{Baseline: InceptionTime}
+
+InceptionTime \citep{inception} applies multi-scale 1D convolutions to each
+channel independently. We use kernel sizes $(9,19,39)$, 2 residual Inception
+blocks, $F{=}32$ filters, and Global Average Pooling — totalling 474k
+parameters. No pre-training is used. Trained with Focal Loss, AdamW, and
+cosine annealing, early-stopped on validation macro F1.
+
+\subsection{Setting 1 — Foundation Model Adaptation}
+
+\paragraph{MOMENT-1-large \citep{moment}.}
+A 341M-parameter T5-based encoder pre-trained on over 1B timesteps from
+diverse domains. We pad sequences to $T{=}40$ (multiple of patch size~8),
+extract per-channel embeddings of dimension 1024, and flatten to a 6144-dim
+vector fed to an MLP head. Training proceeds in two phases: (1) linear
+probing — backbone frozen, only the head trains (200 epochs, early stop
+ep62, val F1 = 0.303); (2) partial unfreeze — last 4 of 24 T5 encoder blocks
+unfrozen with $\text{LR}{=}5{\times}10^{-6}$ (100 epochs, early stop ep26,
+val F1 = 0.303). Despite native support for classification, MOMENT fails to
+improve: 341M parameters is an ill-matched scale for 1,967 training samples.
+
+\paragraph{Chronos-T5-Small \citep{chronos}.}
+A 46M-parameter T5-based model originally pre-trained for univariate
+probabilistic \emph{forecasting} on real and synthetic time series. We discard
+the decoder and repurpose the encoder for classification — analogous to using
+BERT for sentence classification. Each of the 6 passbands is tokenized
+independently; masked mean-pooling over hidden states yields a 512-dim
+per-channel embedding; the 6 embeddings are concatenated into a 3072-dim
+representation, which is fed to a 3-layer MLP head.
+Training: phase~1 linear probing (200 ep, stop ep86, val F1 = 0.433);
+phase~2 partial unfreeze of last 4 encoder blocks,
+$\text{LR}_\text{head}{=}5{\times}10^{-5}$,
+$\text{LR}_\text{enc}{=}5{\times}10^{-6}$ (100 ep, stop ep32, val F1 = 0.433).
+Chronos outperforms MOMENT decisively despite being designed for forecasting,
+confirming that model scale matters more than task alignment when data is scarce.
+
+\subsection{Competitor: UniTS with Data Augmentation}
+
+We also evaluate a complementary augmentation-based approach (external
+repo$^\dagger$) applying jitter ($\sigma{=}0.05$), channel scaling (${\times}[0.9,1.1]$),
+and time shift (${\pm}3$ steps) during training.
+This augmentation improves InceptionTime from acc=0.5483/F1=0.3753 to 0.5783/0.4324,
+and is used to train PatchTST (0.5985/0.4599) and UniTS (0.6606/0.5314).
+
+UniTS \citep{units} (NeurIPS 2024) interleaves per block: sequence attention
+(over time), variable attention (across channels), and a Dynamic Linear
+Operator (DLO) for low-rank temporal mixing $W{=}UV^\top$.
+Config: $d{=}128$, 8 heads, 6 blocks, rank $r{=}16$ (1.6M params).
+Achieves acc = 0.6606, macro F1 = 0.5314 — the highest single-model scores.
+
+\subsection{Additional Models}
+
+\textbf{InceptionTime-Large $\times$5:} 5 seeds, $F{=}64$, 3 blocks + TTA ($N{=}5$). Acc = 0.6427.
+
+\textbf{PatchTST \citep{patchtst}:} channel-independent patches (len=4), $d{=}64$, 3 layers + TTA. Acc = 0.5985, F1 = 0.4599.
+
+\textbf{MultiROCKET \citep{rocket}:} 79,968 random kernel features + RidgeCV. Acc = 0.6079.
+
+\subsection{Ensemble: F1-Weighted Soft Voting}
+
+Each neural model outputs a probability vector $\mathbf{p}_i \in \mathbb{R}^{14}$
+over classes. We combine models via weighted soft voting:
+\begin{equation}
+  \hat{y} = \arg\max_c \sum_i w_i\, p_{i,c},
+  \quad
+  w_i = \frac{\exp(10 \cdot F1_{\text{val},i})}{\sum_j \exp(10 \cdot F1_{\text{val},j})}
+  \label{eq:ensemble}
+\end{equation}
+Models with validation macro F1 $<$ 0.33 are excluded.
+The final ensemble includes InceptionTime-Large$\times$5 ($w{=}0.852$),
+PatchTST ($w{=}0.068$), Chronos ($w{=}0.051$), and MultiROCKET ($w{=}0.029$).
+MOMENT is excluded (val F1 = 0.303).
+
+% ─────────────────────────────────────────────────
+\section{Results}
+% ─────────────────────────────────────────────────
+
+Table~\ref{tab:results} summarises all results on the LSST test set (2,466
+samples). Macro F1 is low due to two structurally unlearnable classes:
+class~53 (7 train samples, F1 = 0) and class~64 (24 samples, F1 = 0.08).
+Excluding these two classes, macro F1 rises to $\approx$0.49.
+Weighted F1 = 0.61 (weighted by class support) better reflects real-world
+performance on the learnable 90\% of test samples.
+
+\begin{table}[t]
+\caption{Test set results on LSST (14-class). Acc = accuracy, Mac.F1 = macro
+  F1, W.F1 = weighted F1. $^\dagger$External implementation
+  (\url{github.com/mhani6/deep\_learning\_time\_series}).
+  SOTA from \citet{bakeoff} reports accuracy only.}
+\label{tab:results}
+\vskip 0.1in
+\begin{center}
+\begin{small}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Method} & \textbf{Acc} & \textbf{Mac.F1} & \textbf{W.F1} \\
+\midrule
+\multicolumn{4}{l}{\textit{Baselines (no pre-training)}} \\
+InceptionTime                      & 0.5483 & 0.3753 & — \\
+InceptionTime + aug.$^\dagger$     & 0.5783 & 0.4324 & — \\
+\midrule
+\multicolumn{4}{l}{\textit{Foundation models (Setting 1)}} \\
+MOMENT-1-large                     & 0.3078 & 0.2791 & — \\
+Chronos-T5-Small                   & 0.5333 & 0.4333 & — \\
+\midrule
+\multicolumn{4}{l}{\textit{Competitor models}} \\
+PatchTST + aug.$^\dagger$ + TTA    & 0.5985 & 0.4599 & — \\
+MultiROCKET                        & 0.6079 & 0.3625 & — \\
+UniTS + aug.$^\dagger$             & 0.6606 & \textbf{0.5314} & — \\
+InceptionTime-L$\times$5 + TTA    & 0.6427 & 0.4150 & — \\
+\midrule
+\textbf{Ensemble (ours)}           & \textbf{0.6448} & 0.4200 & \textbf{0.61} \\
+\midrule
+\multicolumn{4}{l}{\textit{Published SOTA \citep{bakeoff}}} \\
+MUSE                               & 0.636  & —      & — \\
+ROCKET                             & 0.632  & —      & — \\
+MrSEQL                             & 0.603  & —      & — \\
+\bottomrule
+\end{tabular}
+\end{small}
+\end{center}
+\vskip -0.1in
+\end{table}
+
+\paragraph{Foundation model comparison.}
+Chronos (46M) significantly outperforms MOMENT (341M): +22.5 pts accuracy,
++15.4 pts macro F1. The key factor is scale: at 1,967 training samples, a
+341M-parameter model is prone to underfitting even under linear probing, while
+Chronos' compact encoder fine-tunes effectively. Chronos also surpasses the
+baseline (macro F1 0.433 vs.\ 0.375), validating Setting~1.
+
+\paragraph{Competitor comparison.}
+UniTS$^\dagger$ achieves the highest single-model scores among all tested methods
+(acc = 0.6606, F1 = 0.5314), driven by its dual sequence--variable attention
+and low-rank temporal mixing. Our ensemble reaches acc = 0.6448, above the
+best published result on this benchmark (MUSE, 63.6\%, \citealt{bakeoff}),
+though a direct controlled comparison is limited since \citet{bakeoff} reports
+accuracy only and does not address class imbalance.
+
+\paragraph{Class imbalance.}
+Both approaches substantially benefit from imbalance handling. Standard
+InceptionTime from the bake-off (no imbalance handling) achieves only 34.0\%
+\citep{bakeoff}; our baseline with WeightedSampler and Focal Loss reaches
+54.8\% — a +20.8 pt gain from preprocessing alone.
+
+% ─────────────────────────────────────────────────
+\section{Conclusion}
+% ─────────────────────────────────────────────────
+
+We present a comprehensive study of foundation model adaptation (Setting~1) and
+complementary architectures on the LSST benchmark. Our key findings are:
+(1)~Chronos-T5-Small, despite being designed for forecasting, transfers
+effectively to multivariate classification, outperforming MOMENT by a large
+margin — confirming that model scale relative to training set size matters more
+than pre-training task alignment;
+(2)~UniTS with data augmentation achieves the best single-model macro F1
+(0.5314), showing the complementary value of dual-attention architectures;
+(3)~our ensemble (64.48\%) compares favourably to the best published result
+on this benchmark \citep{bakeoff}, without any additional data;
+(4)~imbalance handling (WeightedSampler + Focal Loss) is the single most
+impactful preprocessing decision on this dataset.
+
+\section*{Impact Statement}
+This paper presents work whose goal is to advance the field of Machine Learning.
+There are many potential societal consequences of our work, none which we feel
+must be specifically highlighted here.
+
+\bibliography{report}
+\bibliographystyle{ICML26/icml2026}
+
+\end{document}
